@@ -8,6 +8,29 @@ buildscript {
 		classpath 'pl.allegro.tech.build:axion-release-plugin:1.18.18'
 		classpath 'com.diffplug.spotless:spotless-plugin-gradle:7.0.3'
 	}
+	// axion-release-plugin 1.18.x pulls JGit 6.10.0 and BouncyCastle 1.78/1.80, both with open CVEs
+	// (Dependabot alerts #2-#6 and #8). axion >= 1.20 moves to JGit 7.x, which requires Java 17, so the
+	// plugin cannot be bumped while this project builds on Java 11. Pin the patched versions on the
+	// buildscript classpath instead. None of these jars ship in the published runtime artifact.
+	// Remove these pins once the project moves to Java 17 and axion 1.21+.
+	configurations.classpath {
+		resolutionStrategy {
+			force 'org.eclipse.jgit:org.eclipse.jgit:6.10.1.202505221210-r',
+				  'org.eclipse.jgit:org.eclipse.jgit.ssh.jsch:6.10.1.202505221210-r',
+				  'org.eclipse.jgit:org.eclipse.jgit.ssh.apache:6.10.1.202505221210-r',
+				  'org.eclipse.jgit:org.eclipse.jgit.ui:6.10.1.202505221210-r',
+				  'org.eclipse.jgit:org.eclipse.jgit.gpg.bc:6.10.1.202505221210-r',
+				  'org.bouncycastle:bcprov-jdk18on:1.84',
+				  'org.bouncycastle:bcpg-jdk18on:1.84',
+				  'org.bouncycastle:bcpkix-jdk18on:1.84',
+				  'org.bouncycastle:bcutil-jdk18on:1.84'
+		}
+		// net.i2p.crypto:eddsa has no patched release (CVE-2020-36843, Dependabot alert #1). It is an
+		// optional ed25519 provider for Apache SSHD, pulled in by org.eclipse.jgit.ssh.apache. axion uses
+		// the JSch transport (org.eclipse.jgit.ssh.jsch), so the Apache SSHD stack is never exercised
+		// and eddsa can be dropped from the buildscript classpath altogether.
+		exclude group: 'net.i2p.crypto', module: 'eddsa'
+	}
 }
 apply plugin: 'pl.allegro.tech.build.axion-release'
 apply plugin: 'java-library-distribution'
