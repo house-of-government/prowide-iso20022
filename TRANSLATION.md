@@ -17,7 +17,9 @@ Java module boundaries are not Edriç module requirements. In particular, the 70
 
 ## Current executable slice
 
-`Mx.Types` defines Business Application Header, exact currency amount, credit-transfer, and pacs.008 data. `Mx.Xml` writes the header and pacs.008 XML and escapes element text. `tests/MxTests.idric` fixes exact XML output, escaping, and textual decimal preservation.
+`Mx.Types` defines the first Business Application Header, exact textual currency amount, credit-transfer, and pacs.008 data. `Mx.Xml` writes a standalone `Document`, writes `AppHdr`, and only combines them when an explicit envelope root is supplied. `Mx.Read` locates `Document` and optional `AppHdr` independently of outer wrapper elements, checks the pacs.008.001.08 document namespace, decodes XML entities, and reads the supported pacs.008 fields into typed data. `tests/MxTests.idric` fixes document and envelope output, exact money preservation, XML escaping, bare-document reading, wrapped-header reading, and wrapper-independent payload detection.
+
+The current pacs.008 record is intentionally a first supported subset, not yet a claim of complete XSD validity for every required/optional pacs.008.001.08 component.
 
 Run:
 
@@ -25,4 +27,4 @@ Run:
 make test
 ```
 
-The next correctness milestone is `XML → model → XML` for the same pacs.008 fixture, followed by namespace/version dispatch and schema-derived generation of additional message types.
+The next correctness milestone is namespace/version dispatch plus schema-derived generation of required/optional fields and additional message types. After that, replace string BIC/account/currency values with shared validated Edriç types and add MT ↔ MX translation against the companion `prowide-core` API.
