@@ -44,11 +44,15 @@ bic_institution : String → String
 bic_institution bic =
   element "FIId" (element "FinInstnId" (element "BICFI" (xml_escape bic)))
 
-account : String → String
-account account_id =
-  element "Id" (element "Othr" (element "Id" (xml_escape account_id)))
+account_identification : AccountIdentification → String
+account_identification (IbanAccount account_id) = element "IBAN" (xml_escape account_id)
+account_identification (OtherAccount account_id) =
+  element "Othr" (element "Id" (xml_escape account_id))
 
-optional_account : String → Maybe String → String
+account : AccountIdentification → String
+account account_id = element "Id" (account_identification account_id)
+
+optional_account : String → Maybe AccountIdentification → String
 optional_account _ Nothing = ""
 optional_account element_name (Just account_id) = element element_name (account account_id)
 
