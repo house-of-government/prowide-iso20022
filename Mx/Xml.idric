@@ -1,5 +1,6 @@
 module Mx.Xml
 
+import Mx.Identity
 import Mx.Types
 
 %default total
@@ -95,7 +96,7 @@ render_credit_transfer transfer =
 public export
 render_pacs008 : Pacs008 → String
 render_pacs008 message =
-  "<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08\">" ++
+  "<Document xmlns=\"" ++ mx_namespace pacs00800108 ++ "\">" ++
     element "FIToFICstmrCdtTrf"
       (element "GrpHdr"
          (element "MsgId" (xml_escape message.group_message_id) ++
