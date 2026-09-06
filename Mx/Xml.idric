@@ -79,7 +79,17 @@ render_pacs008 message =
   "</Document>"
 
 public export
-render_mx : MxMessage → String
-render_mx message =
-  render_application_header message.application_header ++
-  render_pacs008 message.pacs008_document
+render_document : MxMessage → String
+render_document message = render_pacs008 message.pacs008_document
+
+render_optional_header : Maybe BusinessApplicationHeader → String
+render_optional_header Nothing = ""
+render_optional_header (Just header) = render_application_header header
+
+public export
+render_envelope : String → MxMessage → String
+render_envelope root_name message =
+  "<" ++ root_name ++ ">" ++
+  render_optional_header message.application_header ++
+  render_document message ++
+  "</" ++ root_name ++ ">"
