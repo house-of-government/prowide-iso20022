@@ -15,6 +15,16 @@ sample_header =
     "swift.cbprplus.02"
     "2026-09-06T13:44:00-04:00"
 
+wrong_definition_header : BusinessApplicationHeader
+wrong_definition_header =
+  MkBusinessApplicationHeader
+    "BANKBEBBAXXX"
+    "BANKDEFFXXXX"
+    "BUSINESS-MESSAGE-123"
+    "pacs.009.001.08"
+    "swift.cbprplus.02"
+    "2026-09-06T13:44:00-04:00"
+
 sample_transfer : CreditTransfer
 sample_transfer =
   MkCreditTransfer
@@ -126,7 +136,22 @@ exact_amount_test = sample_transfer.settlement_amount.amount_text == "1234.56"
 escape_test : Bool
 escape_test =
   xml_escape "A & B < C" == "A &amp; B &lt; C" &&
-  xml_escape_attribute "USD\"X" == "USD&amp;quot;X"
+  xml_escape_attribute "USD\"X" == "USD&quot;X"
+
+identity_test : Bool
+identity_test =
+  case parse_mx_namespace "urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08" of
+    Left _ => False
+    Right message_id =>
+      mx_id_matches message_id "pacs" 8 1 8 &&
+      mx_definition message_id == "pacs.008.001.08" &&
+      mx_namespace message_id == "urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+
+detected_identity_test : Bool
+detected_identity_test =
+  case detect_mx_id expected_document of
+    Left _ => False
+    Right message_id => mx_id_matches message_id "pacs" 8 1 8
 
 document_read_test : Bool
 document_read_test =
@@ -178,6 +203,17 @@ wrong_namespace_rejected_test =
     Left _ => True
     Right _ => False
 
+header_mismatch_rejected_test : Bool
+header_mismatch_rejected_test =
+  let xml =
+        "<RequestPayload>" ++
+        render_application_header wrong_definition_header ++
+        expected_document ++
+        "</RequestPayload>"
+  in case parse_mx xml of
+    Left _ => True
+    Right _ => False
+
 check : String → Bool → IO ()
 check name True = putStrLn ("ok   " ++ name)
 check name False = putStrLn ("FAIL " ++ name)
@@ -189,11 +225,14 @@ all_pass =
   optional_header_test &&
   exact_amount_test &&
   escape_test &&
+  identity_test &&
+  detected_identity_test &&
   document_read_test &&
   envelope_read_test &&
   optional_transaction_fields_test &&
   outer_wrapper_ignored_test &&
-  wrong_namespace_rejected_test
+  wrong_namespace_rejected_test &&
+  header_mismatch_rejected_test
 
 main : IO ()
 main = do
@@ -202,9 +241,12 @@ main = do
   check "AppHdr is optional" optional_header_test
   check "money stays exact text, not floating point" exact_amount_test
   check "XML text and attributes are escaped" escape_test
+  check "MX namespace identity parses and renders" identity_test
+  check "MX identity is detected from Document namespace" detected_identity_test
   check "bare Document parses back to the typed MX model" document_read_test
   check "wrapped AppHdr plus Document parses back to the typed MX model" envelope_read_test
   check "optional transaction identifiers and accounts remain optional" optional_transaction_fields_test
   check "outer wrapper elements do not affect MX payload reading" outer_wrapper_ignored_test
   check "pacs.008 reader rejects another Document namespace" wrong_namespace_rejected_test
+  check "AppHdr MsgDefIdr must match Document identity" header_mismatch_rejected_test
   if all_pass then pure () else exitFailure
