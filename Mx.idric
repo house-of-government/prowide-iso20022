@@ -1,4 +1,4 @@
 module Mx
 
-public import Mx.Types
-public import Mx.Xml
+import public Mx.Types
+import public Mx.Xml
