@@ -1,0 +1,92 @@
+module Main
+
+import Mx
+import System
+
+%default total
+
+sample_header : BusinessApplicationHeader
+sample_header =
+  MkBusinessApplicationHeader
+    "BANKBEBBAXXX"
+    "BANKDEFFXXXX"
+    "BUSINESS-MESSAGE-123"
+    "pacs.008.001.08"
+    "swift.cbprplus.02"
+    "2026-09-06T13:44:00-04:00"
+
+sample_transfer : CreditTransfer
+sample_transfer =
+  MkCreditTransfer
+    "INSTRUCTION-1"
+    "END-TO-END-1"
+    (MkCurrencyAmount "USD" "1234.56")
+    "A & B LLC"
+    "DEBTOR-ACCOUNT"
+    "BANKBEBBAXXX"
+    "BANKDEFFXXXX"
+    "C <D> BENEFICIARY"
+    "CREDITOR-ACCOUNT"
+
+sample_document : Pacs008
+sample_document =
+  MkPacs008
+    "GROUP-MESSAGE-123"
+    "2026-09-06T13:44:00-04:00"
+    1
+    "CLRG"
+    sample_transfer
+
+sample_message : MxMessage
+sample_message = MkMxMessage sample_header sample_document
+
+expected_mx : String
+expected_mx =
+  "<AppHdr xmlns=\"urn:iso:std:iso:20022:tech:xsd:head.001.001.02\">" ++
+  "<Fr><FIId><FinInstnId><BICFI>BANKBEBBAXXX</BICFI></FinInstnId></FIId></Fr>" ++
+  "<To><FIId><FinInstnId><BICFI>BANKDEFFXXXX</BICFI></FinInstnId></FIId></To>" ++
+  "<BizMsgIdr>BUSINESS-MESSAGE-123</BizMsgIdr>" ++
+  "<MsgDefIdr>pacs.008.001.08</MsgDefIdr>" ++
+  "<BizSvc>swift.cbprplus.02</BizSvc>" ++
+  "<CreDt>2026-09-06T13:44:00-04:00</CreDt>" ++
+  "</AppHdr>" ++
+  "<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08\">" ++
+  "<FIToFICstmrCdtTrf>" ++
+  "<GrpHdr>" ++
+  "<MsgId>GROUP-MESSAGE-123</MsgId>" ++
+  "<CreDtTm>2026-09-06T13:44:00-04:00</CreDtTm>" ++
+  "<NbOfTxs>1</NbOfTxs>" ++
+  "<SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>" ++
+  "</GrpHdr>" ++
+  "<CdtTrfTxInf>" ++
+  "<PmtId><InstrId>INSTRUCTION-1</InstrId><EndToEndId>END-TO-END-1</EndToEndId></PmtId>" ++
+  "<IntrBkSttlmAmt Ccy=\"USD\">1234.56</IntrBkSttlmAmt>" ++
+  "<Dbtr><Nm>A &amp; B LLC</Nm></Dbtr>" ++
+  "<DbtrAcct><Id><Othr><Id>DEBTOR-ACCOUNT</Id></Othr></Id></DbtrAcct>" ++
+  "<DbtrAgt><FinInstnId><BICFI>BANKBEBBAXXX</BICFI></FinInstnId></DbtrAgt>" ++
+  "<CdtrAgt><FinInstnId><BICFI>BANKDEFFXXXX</BICFI></FinInstnId></CdtrAgt>" ++
+  "<Cdtr><Nm>C &lt;D&gt; BENEFICIARY</Nm></Cdtr>" ++
+  "<CdtrAcct><Id><Othr><Id>CREDITOR-ACCOUNT</Id></Othr></Id></CdtrAcct>" ++
+  "</CdtTrfTxInf>" ++
+  "</FIToFICstmrCdtTrf>" ++
+  "</Document>"
+
+writer_test : Bool
+writer_test = render_mx sample_message == expected_mx
+
+exact_amount_test : Bool
+exact_amount_test = sample_transfer.settlement_amount.amount_text == "1234.56"
+
+escape_test : Bool
+escape_test = xml_escape "A & B < C" == "A &amp; B &lt; C"
+
+check : String → Bool → IO ()
+check name True = putStrLn ("ok   " ++ name)
+check name False = putStrLn ("FAIL " ++ name)
+
+main : IO ()
+main = do
+  check "pacs.008 renders canonical XML" writer_test
+  check "money stays exact text, not floating point" exact_amount_test
+  check "XML text is escaped" escape_test
+  if writer_test && exact_amount_test && escape_test then pure () else exitFailure
