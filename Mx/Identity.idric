@@ -1,0 +1,117 @@
+module Mx.Identity
+
+%default total
+
+public export
+record MxId where
+  constructor MkMxId
+  business_process : String
+  functionality : ℕ
+  variant : ℕ
+  version : ℕ
+
+namespace_prefix : String
+namespace_prefix = "urn:iso:std:iso:20022:tech:xsd:"
+
+strip_prefix : List Char → List Char → Maybe (List Char)
+strip_prefix [] input = Just input
+strip_prefix _ [] = Nothing
+strip_prefix (expected :: remaining_prefix) (actual :: remaining) =
+  if expected == actual
+    then strip_prefix remaining_prefix remaining
+    else Nothing
+
+split_dot_acc : List Char → List Char → List String
+split_dot_acc current [] = [pack (reverse current)]
+split_dot_acc current ('.' :: remaining) =
+  pack (reverse current) :: split_dot_acc [] remaining
+split_dot_acc current (character :: remaining) =
+  split_dot_acc (character :: current) remaining
+
+split_dot : String → List String
+split_dot text = split_dot_acc [] (unpack text)
+
+digit_value : Char → Maybe ℕ
+digit_value '0' = Just 0
+digit_value '1' = Just 1
+digit_value '2' = Just 2
+digit_value '3' = Just 3
+digit_value '4' = Just 4
+digit_value '5' = Just 5
+digit_value '6' = Just 6
+digit_value '7' = Just 7
+digit_value '8' = Just 8
+digit_value '9' = Just 9
+digit_value _ = Nothing
+
+parse_digits : ℕ → List Char → Maybe ℕ
+parse_digits accumulated [] = Just accumulated
+parse_digits accumulated (character :: remaining) =
+  case digit_value character of
+    Nothing => Nothing
+    Just digit => parse_digits (accumulated * 10 + digit) remaining
+
+parse_number : String → Either String ℕ
+parse_number "" = Left "empty MX identity number"
+parse_number text =
+  case parse_digits 0 (unpack text) of
+    Nothing => Left ("invalid MX identity number " ++ text)
+    Just value => Right value
+
+public export
+parse_mx_definition : String → Either String MxId
+parse_mx_definition definition =
+  case split_dot definition of
+    [process, functionality_text, variant_text, version_text] => do
+      functionality_value <- parse_number functionality_text
+      variant_value <- parse_number variant_text
+      version_value <- parse_number version_text
+      if process == ""
+        then Left "MX business process is empty"
+        else Right (MkMxId process functionality_value variant_value version_value)
+    _ => Left ("invalid MX message definition " ++ definition)
+
+public export
+parse_mx_namespace : String → Either String MxId
+parse_mx_namespace namespace =
+  case strip_prefix (unpack namespace_prefix) (unpack namespace) of
+    Nothing => Left ("not an ISO 20022 Document namespace: " ++ namespace)
+    Just definition => parse_mx_definition (pack definition)
+
+three_digits : ℕ → String
+three_digits number =
+  if number < 10
+    then "00" ++ show number
+    else if number < 100
+      then "0" ++ show number
+      else show number
+
+two_digits : ℕ → String
+two_digits number =
+  if number < 10
+    then "0" ++ show number
+    else show number
+
+public export
+mx_definition : MxId → String
+mx_definition message_id =
+  message_id.business_process ++ "." ++
+  three_digits message_id.functionality ++ "." ++
+  three_digits message_id.variant ++ "." ++
+  two_digits message_id.version
+
+public export
+mx_namespace : MxId → String
+mx_namespace message_id = namespace_prefix ++ mx_definition message_id
+
+public export
+mx_id_matches : MxId → String → ℕ → ℕ → ℕ → Bool
+mx_id_matches message_id process functionality_value variant_value version_value =
+  message_id.business_process == process &&
+  message_id.functionality == functionality_value &&
+  message_id.variant == variant_value &&
+  message_id.version == version_value
+
+public export
+pacs00800108 : MxId
+pacs00800108 = MkMxId "pacs" 8 1 8
