@@ -180,10 +180,10 @@ public export
 detect_mx_id : String → Either String MxId
 detect_mx_id xml = do
   document <- required_slice "Document" xml
-  namespace <- case attribute_value "xmlns" document.attributes_text of
+  document_namespace <- case attribute_value "xmlns" document.attributes_text of
     Nothing => Left "Document is missing its ISO 20022 namespace"
     Just value => Right (xml_unescape value)
-  parse_mx_namespace namespace
+  parse_mx_namespace document_namespace
 
 parse_account : String → Either String AccountIdentification
 parse_account xml =
