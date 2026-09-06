@@ -103,8 +103,9 @@ document_read_test =
   case parse_mx expected_document of
     Left _ => False
     Right parsed =>
-      parsed.application_header == Nothing &&
-      render_document parsed == expected_document
+      case parsed.application_header of
+        Just _ => False
+        Nothing => render_document parsed == expected_document
 
 envelope_read_test : Bool
 envelope_read_test =
