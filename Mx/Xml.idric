@@ -1,5 +1,6 @@
 module Mx.Xml
 
+import PaymentIdentifiers
 import Mx.Identity
 import Mx.Types
 
@@ -41,14 +42,15 @@ optional_element : String → Maybe String → String
 optional_element _ Nothing = ""
 optional_element name (Just content) = element name (xml_escape content)
 
-bic_institution : String → String
+bic_institution : Bic → String
 bic_institution bic =
-  element "FIId" (element "FinInstnId" (element "BICFI" (xml_escape bic)))
+  element "FIId" (element "FinInstnId" (element "BICFI" (xml_escape (bic_text bic))))
 
 account_identification : AccountIdentification → String
-account_identification (IbanAccount account_id) = element "IBAN" (xml_escape account_id)
+account_identification (IbanAccount account_id) =
+  element "IBAN" (xml_escape (account_text account_id))
 account_identification (OtherAccount account_id) =
-  element "Othr" (element "Id" (xml_escape account_id))
+  element "Othr" (element "Id" (xml_escape (account_text account_id)))
 
 account : AccountIdentification → String
 account account_id = element "Id" (account_identification account_id)
@@ -57,8 +59,8 @@ optional_account : String → Maybe AccountIdentification → String
 optional_account _ Nothing = ""
 optional_account element_name (Just account_id) = element element_name (account account_id)
 
-agent : String → String
-agent bic = element "FinInstnId" (element "BICFI" (xml_escape bic))
+agent : Bic → String
+agent bic = element "FinInstnId" (element "BICFI" (xml_escape (bic_text bic)))
 
 render_amount : CurrencyAmount → String
 render_amount amount =
