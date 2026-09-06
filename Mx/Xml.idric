@@ -19,8 +19,26 @@ public export
 xml_escape : String → String
 xml_escape text = xml_escape_characters (unpack text)
 
+xml_escape_attribute_char : Char → String
+xml_escape_attribute_char '"' = "&quot;"
+xml_escape_attribute_char '\'' = "&apos;"
+xml_escape_attribute_char character = xml_escape_char character
+
+xml_escape_attribute_characters : List Char → String
+xml_escape_attribute_characters [] = ""
+xml_escape_attribute_characters (character :: remaining) =
+  xml_escape_attribute_char character ++ xml_escape_attribute_characters remaining
+
+public export
+xml_escape_attribute : String → String
+xml_escape_attribute text = xml_escape_attribute_characters (unpack text)
+
 element : String → String → String
 element name content = "<" ++ name ++ ">" ++ content ++ "</" ++ name ++ ">"
+
+optional_element : String → Maybe String → String
+optional_element _ Nothing = ""
+optional_element name (Just content) = element name (xml_escape content)
 
 bic_institution : String → String
 bic_institution bic =
@@ -30,12 +48,16 @@ account : String → String
 account account_id =
   element "Id" (element "Othr" (element "Id" (xml_escape account_id)))
 
+optional_account : String → Maybe String → String
+optional_account _ Nothing = ""
+optional_account element_name (Just account_id) = element element_name (account account_id)
+
 agent : String → String
 agent bic = element "FinInstnId" (element "BICFI" (xml_escape bic))
 
 render_amount : CurrencyAmount → String
 render_amount amount =
-  "<IntrBkSttlmAmt Ccy=\"" ++ xml_escape amount.currency_code ++ "\">" ++
+  "<IntrBkSttlmAmt Ccy=\"" ++ xml_escape_attribute amount.currency_code ++ "\">" ++
   xml_escape amount.amount_text ++
   "</IntrBkSttlmAmt>"
 
@@ -55,15 +77,16 @@ render_credit_transfer : CreditTransfer → String
 render_credit_transfer transfer =
   element "CdtTrfTxInf"
     (element "PmtId"
-       (element "InstrId" (xml_escape transfer.instruction_id) ++
+       (optional_element "InstrId" transfer.instruction_id ++
         element "EndToEndId" (xml_escape transfer.end_to_end_id)) ++
      render_amount transfer.settlement_amount ++
+     element "ChrgBr" (xml_escape transfer.charge_bearer) ++
      element "Dbtr" (element "Nm" (xml_escape transfer.debtor_name)) ++
-     element "DbtrAcct" (account transfer.debtor_account) ++
+     optional_account "DbtrAcct" transfer.debtor_account ++
      element "DbtrAgt" (agent transfer.debtor_agent_bic) ++
      element "CdtrAgt" (agent transfer.creditor_agent_bic) ++
      element "Cdtr" (element "Nm" (xml_escape transfer.creditor_name)) ++
-     element "CdtrAcct" (account transfer.creditor_account))
+     optional_account "CdtrAcct" transfer.creditor_account)
 
 public export
 render_pacs008 : Pacs008 → String
