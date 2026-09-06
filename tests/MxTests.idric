@@ -38,10 +38,13 @@ sample_document =
     sample_transfer
 
 sample_message : MxMessage
-sample_message = MkMxMessage sample_header sample_document
+sample_message = MkMxMessage (Just sample_header) sample_document
 
-expected_mx : String
-expected_mx =
+sample_message_without_header : MxMessage
+sample_message_without_header = MkMxMessage Nothing sample_document
+
+expected_header : String
+expected_header =
   "<AppHdr xmlns=\"urn:iso:std:iso:20022:tech:xsd:head.001.001.02\">" ++
   "<Fr><FIId><FinInstnId><BICFI>BANKBEBBAXXX</BICFI></FinInstnId></FIId></Fr>" ++
   "<To><FIId><FinInstnId><BICFI>BANKDEFFXXXX</BICFI></FinInstnId></FIId></To>" ++
@@ -49,7 +52,10 @@ expected_mx =
   "<MsgDefIdr>pacs.008.001.08</MsgDefIdr>" ++
   "<BizSvc>swift.cbprplus.02</BizSvc>" ++
   "<CreDt>2026-09-06T13:44:00-04:00</CreDt>" ++
-  "</AppHdr>" ++
+  "</AppHdr>"
+
+expected_document : String
+expected_document =
   "<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08\">" ++
   "<FIToFICstmrCdtTrf>" ++
   "<GrpHdr>" ++
@@ -71,8 +77,18 @@ expected_mx =
   "</FIToFICstmrCdtTrf>" ++
   "</Document>"
 
-writer_test : Bool
-writer_test = render_mx sample_message == expected_mx
+document_writer_test : Bool
+document_writer_test = render_document sample_message == expected_document
+
+envelope_writer_test : Bool
+envelope_writer_test =
+  render_envelope "RequestPayload" sample_message ==
+  "<RequestPayload>" ++ expected_header ++ expected_document ++ "</RequestPayload>"
+
+optional_header_test : Bool
+optional_header_test =
+  render_envelope "RequestPayload" sample_message_without_header ==
+  "<RequestPayload>" ++ expected_document ++ "</RequestPayload>"
 
 exact_amount_test : Bool
 exact_amount_test = sample_transfer.settlement_amount.amount_text == "1234.56"
@@ -84,9 +100,19 @@ check : String → Bool → IO ()
 check name True = putStrLn ("ok   " ++ name)
 check name False = putStrLn ("FAIL " ++ name)
 
+all_pass : Bool
+all_pass =
+  document_writer_test &&
+  envelope_writer_test &&
+  optional_header_test &&
+  exact_amount_test &&
+  escape_test
+
 main : IO ()
 main = do
-  check "pacs.008 renders canonical XML" writer_test
+  check "pacs.008 Document renders canonical XML" document_writer_test
+  check "AppHdr plus Document requires explicit envelope" envelope_writer_test
+  check "AppHdr is optional" optional_header_test
   check "money stays exact text, not floating point" exact_amount_test
   check "XML text is escaped" escape_test
-  if writer_test && exact_amount_test && escape_test then pure () else exitFailure
+  if all_pass then pure () else exitFailure
