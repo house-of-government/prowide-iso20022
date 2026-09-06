@@ -21,15 +21,16 @@ record CurrencyAmount where
 public export
 record CreditTransfer where
   constructor MkCreditTransfer
-  instruction_id : String
+  instruction_id : Maybe String
   end_to_end_id : String
   settlement_amount : CurrencyAmount
+  charge_bearer : String
   debtor_name : String
-  debtor_account : String
+  debtor_account : Maybe String
   debtor_agent_bic : String
   creditor_agent_bic : String
   creditor_name : String
-  creditor_account : String
+  creditor_account : Maybe String
 
 public export
 record Pacs008 where
