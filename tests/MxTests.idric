@@ -77,13 +77,15 @@ expected_document =
   "</FIToFICstmrCdtTrf>" ++
   "</Document>"
 
+expected_envelope : String
+expected_envelope =
+  "<RequestPayload>" ++ expected_header ++ expected_document ++ "</RequestPayload>"
+
 document_writer_test : Bool
 document_writer_test = render_document sample_message == expected_document
 
 envelope_writer_test : Bool
-envelope_writer_test =
-  render_envelope "RequestPayload" sample_message ==
-  "<RequestPayload>" ++ expected_header ++ expected_document ++ "</RequestPayload>"
+envelope_writer_test = render_envelope "RequestPayload" sample_message == expected_envelope
 
 optional_header_test : Bool
 optional_header_test =
@@ -96,6 +98,43 @@ exact_amount_test = sample_transfer.settlement_amount.amount_text == "1234.56"
 escape_test : Bool
 escape_test = xml_escape "A & B < C" == "A &amp; B &lt; C"
 
+document_read_test : Bool
+document_read_test =
+  case parse_mx expected_document of
+    Left _ => False
+    Right parsed =>
+      parsed.application_header == Nothing &&
+      render_document parsed == expected_document
+
+envelope_read_test : Bool
+envelope_read_test =
+  case parse_mx expected_envelope of
+    Left _ => False
+    Right parsed =>
+      case parsed.application_header of
+        Nothing => False
+        Just header =>
+          header.sender_bic == "BANKBEBBAXXX" &&
+          header.receiver_bic == "BANKDEFFXXXX" &&
+          header.message_definition_id == "pacs.008.001.08" &&
+          render_envelope "RequestPayload" parsed == expected_envelope
+
+outer_wrapper_ignored_test : Bool
+outer_wrapper_ignored_test =
+  case parse_mx ("<Outer><Inner>metadata</Inner>" ++ expected_envelope ++ "</Outer>") of
+    Left _ => False
+    Right parsed =>
+      parsed.pacs008_document.group_message_id == "GROUP-MESSAGE-123" &&
+      parsed.pacs008_document.credit_transfer.settlement_amount.amount_text == "1234.56"
+
+wrong_namespace_rejected_test : Bool
+wrong_namespace_rejected_test =
+  case parse_mx
+    ("<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:pacs.009.001.08\">" ++
+     "<FIToFICstmrCdtTrf></FIToFICstmrCdtTrf></Document>") of
+    Left _ => True
+    Right _ => False
+
 check : String → Bool → IO ()
 check name True = putStrLn ("ok   " ++ name)
 check name False = putStrLn ("FAIL " ++ name)
@@ -106,13 +145,21 @@ all_pass =
   envelope_writer_test &&
   optional_header_test &&
   exact_amount_test &&
-  escape_test
+  escape_test &&
+  document_read_test &&
+  envelope_read_test &&
+  outer_wrapper_ignored_test &&
+  wrong_namespace_rejected_test
 
 main : IO ()
 main = do
-  check "pacs.008 Document renders canonical XML" document_writer_test
+  check "pacs.008 Document renders deterministic subset XML" document_writer_test
   check "AppHdr plus Document requires explicit envelope" envelope_writer_test
   check "AppHdr is optional" optional_header_test
   check "money stays exact text, not floating point" exact_amount_test
   check "XML text is escaped" escape_test
+  check "bare Document parses back to the typed MX model" document_read_test
+  check "wrapped AppHdr plus Document parses back to the typed MX model" envelope_read_test
+  check "outer wrapper elements do not affect MX payload reading" outer_wrapper_ignored_test
+  check "pacs.008 reader rejects another Document namespace" wrong_namespace_rejected_test
   if all_pass then pure () else exitFailure
