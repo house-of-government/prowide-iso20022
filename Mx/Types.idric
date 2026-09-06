@@ -1,12 +1,14 @@
 module Mx.Types
 
+import PaymentIdentifiers
+
 %default total
 
 public export
 record BusinessApplicationHeader where
   constructor MkBusinessApplicationHeader
-  sender_bic : String
-  receiver_bic : String
+  sender_bic : Bic
+  receiver_bic : Bic
   business_message_id : String
   message_definition_id : String
   business_service : String
@@ -19,11 +21,6 @@ record CurrencyAmount where
   amount_text : String
 
 public export
-data AccountIdentification
-  = IbanAccount String
-  | OtherAccount String
-
-public export
 record CreditTransfer where
   constructor MkCreditTransfer
   instruction_id : Maybe String
@@ -32,8 +29,8 @@ record CreditTransfer where
   charge_bearer : String
   debtor_name : String
   debtor_account : Maybe AccountIdentification
-  debtor_agent_bic : String
-  creditor_agent_bic : String
+  debtor_agent_bic : Bic
+  creditor_agent_bic : Bic
   creditor_name : String
   creditor_account : Maybe AccountIdentification
 
