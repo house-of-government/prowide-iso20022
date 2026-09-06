@@ -18,15 +18,30 @@ sample_header =
 sample_transfer : CreditTransfer
 sample_transfer =
   MkCreditTransfer
-    "INSTRUCTION-1"
+    (Just "INSTRUCTION-1")
     "END-TO-END-1"
     (MkCurrencyAmount "USD" "1234.56")
+    "SHAR"
     "A & B LLC"
-    "DEBTOR-ACCOUNT"
+    (Just (OtherAccount "DEBTOR-ACCOUNT"))
     "BANKBEBBAXXX"
     "BANKDEFFXXXX"
     "C <D> BENEFICIARY"
-    "CREDITOR-ACCOUNT"
+    (Just (IbanAccount "DE89370400440532013000"))
+
+minimal_transfer : CreditTransfer
+minimal_transfer =
+  MkCreditTransfer
+    Nothing
+    "END-TO-END-MINIMAL"
+    (MkCurrencyAmount "EUR" "1.00")
+    "SLEV"
+    "DEBTOR"
+    Nothing
+    "BANKBEBBAXXX"
+    "BANKDEFFXXXX"
+    "CREDITOR"
+    Nothing
 
 sample_document : Pacs008
 sample_document =
@@ -37,11 +52,23 @@ sample_document =
     "CLRG"
     sample_transfer
 
+minimal_document : Pacs008
+minimal_document =
+  MkPacs008
+    "GROUP-MESSAGE-MINIMAL"
+    "2026-09-06T13:44:00-04:00"
+    1
+    "CLRG"
+    minimal_transfer
+
 sample_message : MxMessage
 sample_message = MkMxMessage (Just sample_header) sample_document
 
 sample_message_without_header : MxMessage
 sample_message_without_header = MkMxMessage Nothing sample_document
+
+minimal_message : MxMessage
+minimal_message = MkMxMessage Nothing minimal_document
 
 expected_header : String
 expected_header =
@@ -67,12 +94,13 @@ expected_document =
   "<CdtTrfTxInf>" ++
   "<PmtId><InstrId>INSTRUCTION-1</InstrId><EndToEndId>END-TO-END-1</EndToEndId></PmtId>" ++
   "<IntrBkSttlmAmt Ccy=\"USD\">1234.56</IntrBkSttlmAmt>" ++
+  "<ChrgBr>SHAR</ChrgBr>" ++
   "<Dbtr><Nm>A &amp; B LLC</Nm></Dbtr>" ++
   "<DbtrAcct><Id><Othr><Id>DEBTOR-ACCOUNT</Id></Othr></Id></DbtrAcct>" ++
   "<DbtrAgt><FinInstnId><BICFI>BANKBEBBAXXX</BICFI></FinInstnId></DbtrAgt>" ++
   "<CdtrAgt><FinInstnId><BICFI>BANKDEFFXXXX</BICFI></FinInstnId></CdtrAgt>" ++
   "<Cdtr><Nm>C &lt;D&gt; BENEFICIARY</Nm></Cdtr>" ++
-  "<CdtrAcct><Id><Othr><Id>CREDITOR-ACCOUNT</Id></Othr></Id></CdtrAcct>" ++
+  "<CdtrAcct><Id><IBAN>DE89370400440532013000</IBAN></Id></CdtrAcct>" ++
   "</CdtTrfTxInf>" ++
   "</FIToFICstmrCdtTrf>" ++
   "</Document>"
@@ -96,7 +124,9 @@ exact_amount_test : Bool
 exact_amount_test = sample_transfer.settlement_amount.amount_text == "1234.56"
 
 escape_test : Bool
-escape_test = xml_escape "A & B < C" == "A &amp; B &lt; C"
+escape_test =
+  xml_escape "A & B < C" == "A &amp; B &lt; C" &&
+  xml_escape_attribute "USD\"X" == "USD&amp;quot;X"
 
 document_read_test : Bool
 document_read_test =
@@ -120,13 +150,25 @@ envelope_read_test =
           header.message_definition_id == "pacs.008.001.08" &&
           render_envelope "RequestPayload" parsed == expected_envelope
 
+optional_transaction_fields_test : Bool
+optional_transaction_fields_test =
+  let xml = render_document minimal_message in
+    case parse_mx xml of
+      Left _ => False
+      Right parsed =>
+        let transfer = parsed.pacs008_document.credit_transfer in
+          case (transfer.instruction_id, transfer.debtor_account, transfer.creditor_account) of
+            (Nothing, Nothing, Nothing) => render_document parsed == xml
+            _ => False
+
 outer_wrapper_ignored_test : Bool
 outer_wrapper_ignored_test =
   case parse_mx ("<Outer><Inner>metadata</Inner>" ++ expected_envelope ++ "</Outer>") of
     Left _ => False
     Right parsed =>
       parsed.pacs008_document.group_message_id == "GROUP-MESSAGE-123" &&
-      parsed.pacs008_document.credit_transfer.settlement_amount.amount_text == "1234.56"
+      parsed.pacs008_document.credit_transfer.settlement_amount.amount_text == "1234.56" &&
+      parsed.pacs008_document.credit_transfer.charge_bearer == "SHAR"
 
 wrong_namespace_rejected_test : Bool
 wrong_namespace_rejected_test =
@@ -149,6 +191,7 @@ all_pass =
   escape_test &&
   document_read_test &&
   envelope_read_test &&
+  optional_transaction_fields_test &&
   outer_wrapper_ignored_test &&
   wrong_namespace_rejected_test
 
@@ -158,9 +201,10 @@ main = do
   check "AppHdr plus Document requires explicit envelope" envelope_writer_test
   check "AppHdr is optional" optional_header_test
   check "money stays exact text, not floating point" exact_amount_test
-  check "XML text is escaped" escape_test
+  check "XML text and attributes are escaped" escape_test
   check "bare Document parses back to the typed MX model" document_read_test
   check "wrapped AppHdr plus Document parses back to the typed MX model" envelope_read_test
+  check "optional transaction identifiers and accounts remain optional" optional_transaction_fields_test
   check "outer wrapper elements do not affect MX payload reading" outer_wrapper_ignored_test
   check "pacs.008 reader rejects another Document namespace" wrong_namespace_rejected_test
   if all_pass then pure () else exitFailure
