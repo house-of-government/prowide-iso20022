@@ -17,7 +17,7 @@ check-vocabulary:
 	fi
 
 test: all
-	$(IDRIC) -p prowide_core_edric tests/MxTests.idric -o prowide-iso20022-edric-tests
+	$(IDRIC) -p prowide_identifiers_edric tests/MxTests.idric -o prowide-iso20022-edric-tests
 	./build/exec/prowide-iso20022-edric-tests
 
 clean:
