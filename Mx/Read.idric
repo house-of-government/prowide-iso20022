@@ -115,18 +115,17 @@ attribute_value name attributes =
 
 xml_unescape_chars : List Char → List Char
 xml_unescape_chars [] = []
-xml_unescape_chars input@(character :: rest) =
-  case strip_prefix (unpack "&amp;") input of
-    Just remaining => '&' :: xml_unescape_chars remaining
-    Nothing => case strip_prefix (unpack "&lt;") input of
-      Just remaining => '<' :: xml_unescape_chars remaining
-      Nothing => case strip_prefix (unpack "&gt;") input of
-        Just remaining => '>' :: xml_unescape_chars remaining
-        Nothing => case strip_prefix (unpack "&quot;") input of
-          Just remaining => '"' :: xml_unescape_chars remaining
-          Nothing => case strip_prefix (unpack "&apos;") input of
-            Just remaining => '\'' :: xml_unescape_chars remaining
-            Nothing => character :: xml_unescape_chars rest
+xml_unescape_chars ('&' :: 'a' :: 'm' :: 'p' :: ';' :: rest) =
+  '&' :: xml_unescape_chars rest
+xml_unescape_chars ('&' :: 'l' :: 't' :: ';' :: rest) =
+  '<' :: xml_unescape_chars rest
+xml_unescape_chars ('&' :: 'g' :: 't' :: ';' :: rest) =
+  '>' :: xml_unescape_chars rest
+xml_unescape_chars ('&' :: 'q' :: 'u' :: 'o' :: 't' :: ';' :: rest) =
+  '"' :: xml_unescape_chars rest
+xml_unescape_chars ('&' :: 'a' :: 'p' :: 'o' :: 's' :: ';' :: rest) =
+  '\'' :: xml_unescape_chars rest
+xml_unescape_chars (character :: rest) = character :: xml_unescape_chars rest
 
 xml_unescape : String → String
 xml_unescape text = pack (xml_unescape_chars (unpack text))
