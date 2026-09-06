@@ -6,8 +6,11 @@ contains	PROWIDE-MX-EDRIC-AMOUNT	Mx/Types.idric	record CurrencyAmount where
 contains	PROWIDE-MX-EDRIC-PACS008	Mx/Types.idric	record Pacs008 where
 contains	PROWIDE-MX-EDRIC-DOCUMENT-WRITER	Mx/Xml.idric	render_document : MxMessage → String
 contains	PROWIDE-MX-EDRIC-ENVELOPE-WRITER	Mx/Xml.idric	render_envelope : String → MxMessage → String
+contains	PROWIDE-MX-EDRIC-READER	Mx/Read.idric	parse_mx : String → Either String MxMessage
 contains	PROWIDE-MX-EDRIC-EXACT-MONEY	tests/MxTests.idric	money stays exact text, not floating point
-contains	PROWIDE-MX-EDRIC-DOCUMENT-TEST	tests/MxTests.idric	pacs.008 Document renders canonical XML
+contains	PROWIDE-MX-EDRIC-DOCUMENT-TEST	tests/MxTests.idric	pacs.008 Document renders deterministic subset XML
 contains	PROWIDE-MX-EDRIC-ENVELOPE-TEST	tests/MxTests.idric	AppHdr plus Document requires explicit envelope
-contains	PROWIDE-MX-EDRIC-PACKAGE	prowide-iso20022.ipkg	modules = Mx, Mx.Types, Mx.Xml
+contains	PROWIDE-MX-EDRIC-READ-TEST	tests/MxTests.idric	bare Document parses back to the typed MX model
+contains	PROWIDE-MX-EDRIC-WRAPPER-TEST	tests/MxTests.idric	outer wrapper elements do not affect MX payload reading
+contains	PROWIDE-MX-EDRIC-PACKAGE	prowide-iso20022.ipkg	modules = Mx, Mx.Types, Mx.Xml, Mx.Read
 not_contains	PROWIDE-MX-EDRIC-NO-DOUBLE	Mx/Types.idric	Double
