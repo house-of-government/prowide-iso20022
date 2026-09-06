@@ -1,5 +1,6 @@
 module Mx.Read
 
+import PaymentIdentifiers
 import Mx.Identity
 import Mx.Types
 
@@ -184,25 +185,27 @@ detect_mx_id xml = do
     Just value => Right (xml_unescape value)
   parse_mx_namespace document_namespace
 
-parse_account : String → Either String AccountIdentification
-parse_account xml =
+parse_account_identification : String → Either String AccountIdentification
+parse_account_identification xml =
   case element_slice "IBAN" xml of
-    Just iban => Right (IbanAccount (xml_unescape iban.element_body))
+    Just iban => iban_account (xml_unescape iban.element_body)
     Nothing => do
       other <- required_slice "Othr" xml
       account_id <- required_text "Id" other.element_body
-      pure (OtherAccount account_id)
+      other_account account_id
 
 parse_optional_account : String → String → Either String (Maybe AccountIdentification)
 parse_optional_account name xml =
   case element_slice name xml of
     Nothing => Right Nothing
     Just account_element => do
-      account_id <- parse_account account_element.element_body
+      account_id <- parse_account_identification account_element.element_body
       pure (Just account_id)
 
-parse_agent : String → Either String String
-parse_agent xml = required_text "BICFI" xml
+parse_agent : String → Either String Bic
+parse_agent xml = do
+  bic_value <- required_text "BICFI" xml
+  parse_bic bic_value
 
 parse_party : String → Either String String
 parse_party xml = required_text "Nm" xml
@@ -271,9 +274,11 @@ parse_application_header xml =
     Nothing => Right Nothing
     Just header => do
       from <- required_slice "Fr" header.element_body
-      sender <- required_text "BICFI" from.element_body
+      sender_text <- required_text "BICFI" from.element_body
+      sender <- parse_bic sender_text
       to <- required_slice "To" header.element_body
-      receiver <- required_text "BICFI" to.element_body
+      receiver_text <- required_text "BICFI" to.element_body
+      receiver <- parse_bic receiver_text
       message_id <- required_text "BizMsgIdr" header.element_body
       definition_id <- required_text "MsgDefIdr" header.element_body
       service <- required_text "BizSvc" header.element_body
