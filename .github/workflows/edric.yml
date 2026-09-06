@@ -15,7 +15,7 @@ jobs:
       - name: Checkout Prowide ISO 20022 fork
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      - name: Checkout shared identifier boundary from Core draft
+      - name: Checkout shared identifier package from Core draft
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: isomorphisms/prowide-core
@@ -35,7 +35,7 @@ jobs:
           echo "$GITHUB_WORKSPACE/.tools/Idric/_/.tools/bin" >> "$GITHUB_PATH"
           "$GITHUB_WORKSPACE/.tools/Idric/idris2" --version
 
-      - name: Build and install shared identifiers
+      - name: Build and install shared identifier package
         env:
           IDRIS2_PREFIX: ${{ github.workspace }}/.tools/Idric/bootstrap-build
         run: |
