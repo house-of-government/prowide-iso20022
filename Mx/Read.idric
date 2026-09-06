@@ -10,19 +10,16 @@ record XmlElementSlice where
   attributes_text : String
   element_body : String
 
-starts_with : List Char → List Char → Bool
-starts_with [] _ = True
-starts_with _ [] = False
-starts_with (expected :: remaining_prefix) (actual :: remaining) =
-  expected == actual && starts_with remaining_prefix remaining
-
 strip_prefix : List Char → List Char → Maybe (List Char)
 strip_prefix [] input = Just input
 strip_prefix _ [] = Nothing
 strip_prefix (expected :: remaining_prefix) (actual :: remaining) =
   if expected == actual
-    then strip_prefix remaining_prefix remaining
+    then strip_prefix remaining_prefix input
     else Nothing
+  where
+    input : List Char
+    input = actual :: remaining
 
 name_end : Char → Bool
 name_end ' ' = True
@@ -148,6 +145,12 @@ required_text name xml =
     Nothing => Left ("MX XML is missing element " ++ name)
     Just value => Right (xml_unescape value.element_body)
 
+optional_text : String → String → Maybe String
+optional_text name xml =
+  case element_slice name xml of
+    Nothing => Nothing
+    Just value => Just (xml_unescape value.element_body)
+
 digit_value : Char → Maybe ℕ
 digit_value '0' = Just 0
 digit_value '1' = Just 1
@@ -175,10 +178,22 @@ parse_number text =
     Nothing => Left "MX decimal count contains a non-digit"
     Just value => Right value
 
-parse_account : String → Either String String
-parse_account xml = do
-  other <- required_slice "Othr" xml
-  required_text "Id" other.element_body
+parse_account : String → Either String AccountIdentification
+parse_account xml =
+  case element_slice "IBAN" xml of
+    Just iban => Right (IbanAccount (xml_unescape iban.element_body))
+    Nothing => do
+      other <- required_slice "Othr" xml
+      account_id <- required_text "Id" other.element_body
+      pure (OtherAccount account_id)
+
+parse_optional_account : String → String → Either String (Maybe AccountIdentification)
+parse_optional_account name xml =
+  case element_slice name xml of
+    Nothing => Right Nothing
+    Just account_element => do
+      account_id <- parse_account account_element.element_body
+      pure (Just account_id)
 
 parse_agent : String → Either String String
 parse_agent xml = required_text "BICFI" xml
@@ -189,29 +204,29 @@ parse_party xml = required_text "Nm" xml
 parse_transfer : String → Either String CreditTransfer
 parse_transfer xml = do
   payment_id <- required_slice "PmtId" xml
-  instruction_id <- required_text "InstrId" payment_id.element_body
+  let instruction_id = optional_text "InstrId" payment_id.element_body
   end_to_end_id <- required_text "EndToEndId" payment_id.element_body
   amount <- required_slice "IntrBkSttlmAmt" xml
   currency <- case attribute_value "Ccy" amount.attributes_text of
     Nothing => Left "IntrBkSttlmAmt is missing Ccy"
-    Just value => Right value
+    Just value => Right (xml_unescape value)
+  charge_bearer <- required_text "ChrgBr" xml
   debtor <- required_slice "Dbtr" xml
   debtor_name <- parse_party debtor.element_body
-  debtor_account_element <- required_slice "DbtrAcct" xml
-  debtor_account <- parse_account debtor_account_element.element_body
+  debtor_account <- parse_optional_account "DbtrAcct" xml
   debtor_agent <- required_slice "DbtrAgt" xml
   debtor_bic <- parse_agent debtor_agent.element_body
   creditor_agent <- required_slice "CdtrAgt" xml
   creditor_bic <- parse_agent creditor_agent.element_body
   creditor <- required_slice "Cdtr" xml
   creditor_name <- parse_party creditor.element_body
-  creditor_account_element <- required_slice "CdtrAcct" xml
-  creditor_account <- parse_account creditor_account_element.element_body
+  creditor_account <- parse_optional_account "CdtrAcct" xml
   pure
     (MkCreditTransfer
       instruction_id
       end_to_end_id
       (MkCurrencyAmount currency (xml_unescape amount.element_body))
+      charge_bearer
       debtor_name
       debtor_account
       debtor_bic
