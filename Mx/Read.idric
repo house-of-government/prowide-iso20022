@@ -1,0 +1,277 @@
+module Mx.Read
+
+import Mx.Types
+
+%default total
+
+record XmlElementSlice where
+  constructor MkXmlElementSlice
+  qualified_name : String
+  attributes_text : String
+  element_body : String
+
+starts_with : List Char → List Char → Bool
+starts_with [] _ = True
+starts_with _ [] = False
+starts_with (expected :: remaining_prefix) (actual :: remaining) =
+  expected == actual && starts_with remaining_prefix remaining
+
+strip_prefix : List Char → List Char → Maybe (List Char)
+strip_prefix [] input = Just input
+strip_prefix _ [] = Nothing
+strip_prefix (expected :: remaining_prefix) (actual :: remaining) =
+  if expected == actual
+    then strip_prefix remaining_prefix remaining
+    else Nothing
+
+name_end : Char → Bool
+name_end ' ' = True
+name_end '\t' = True
+name_end '\r' = True
+name_end '\n' = True
+name_end '>' = True
+name_end '/' = True
+name_end _ = False
+
+take_name : List Char → (List Char, List Char)
+take_name [] = ([], [])
+take_name input@(character :: rest) =
+  if name_end character
+    then ([], input)
+    else let (name, remaining) = take_name rest in
+      (character :: name, remaining)
+
+after_colon : List Char → Maybe (List Char)
+after_colon [] = Nothing
+after_colon (':' :: rest) = Just rest
+after_colon (_ :: rest) = after_colon rest
+
+local_name : List Char → List Char
+local_name name =
+  case after_colon name of
+    Nothing => name
+    Just local => local
+
+take_to_gt : List Char → List Char → Maybe (List Char, List Char)
+take_to_gt _ [] = Nothing
+take_to_gt accumulated ('>' :: rest) = Just (reverse accumulated, rest)
+take_to_gt accumulated (character :: rest) =
+  take_to_gt (character :: accumulated) rest
+
+take_until_sequence :
+  List Char →
+  List Char →
+  Maybe (List Char, List Char)
+take_until_sequence _ [] = Nothing
+take_until_sequence sequence input@(character :: rest) =
+  case strip_prefix sequence input of
+    Just remaining => Just ([], remaining)
+    Nothing =>
+      case take_until_sequence sequence rest of
+        Nothing => Nothing
+        Just (before, remaining) => Just (character :: before, remaining)
+
+find_element_start : String → List Char → Maybe (String, String, List Char)
+find_element_start _ [] = Nothing
+find_element_start target ('<' :: '/' :: rest) = find_element_start target rest
+find_element_start target ('<' :: rest) =
+  let (name_characters, after_name) = take_name rest
+      name = pack name_characters
+  in if pack (local_name name_characters) == target
+       then case take_to_gt [] after_name of
+         Nothing => Nothing
+         Just (attributes, body) => Just (name, pack attributes, body)
+       else find_element_start target rest
+find_element_start target (_ :: rest) = find_element_start target rest
+
+element_slice : String → String → Maybe XmlElementSlice
+element_slice target xml =
+  case find_element_start target (unpack xml) of
+    Nothing => Nothing
+    Just (name, attributes, body) =>
+      let closing = unpack ("</" ++ name ++ ">") in
+        case take_until_sequence closing body of
+          Nothing => Nothing
+          Just (inside, _) => Just (MkXmlElementSlice name attributes (pack inside))
+
+find_after : List Char → List Char → Maybe (List Char)
+find_after _ [] = Nothing
+find_after sequence input@(_ :: rest) =
+  case strip_prefix sequence input of
+    Just remaining => Just remaining
+    Nothing => find_after sequence rest
+
+take_until_quote : List Char → Maybe (List Char)
+take_until_quote [] = Nothing
+take_until_quote ('"' :: _) = Just []
+take_until_quote (character :: rest) =
+  case take_until_quote rest of
+    Nothing => Nothing
+    Just remaining => Just (character :: remaining)
+
+attribute_value : String → String → Maybe String
+attribute_value name attributes =
+  case find_after (unpack (name ++ "=\"")) (unpack attributes) of
+    Nothing => Nothing
+    Just value_start =>
+      case take_until_quote value_start of
+        Nothing => Nothing
+        Just value => Just (pack value)
+
+xml_unescape_chars : List Char → List Char
+xml_unescape_chars [] = []
+xml_unescape_chars input@(character :: rest) =
+  case strip_prefix (unpack "&amp;") input of
+    Just remaining => '&' :: xml_unescape_chars remaining
+    Nothing => case strip_prefix (unpack "&lt;") input of
+      Just remaining => '<' :: xml_unescape_chars remaining
+      Nothing => case strip_prefix (unpack "&gt;") input of
+        Just remaining => '>' :: xml_unescape_chars remaining
+        Nothing => case strip_prefix (unpack "&quot;") input of
+          Just remaining => '"' :: xml_unescape_chars remaining
+          Nothing => case strip_prefix (unpack "&apos;") input of
+            Just remaining => '\'' :: xml_unescape_chars remaining
+            Nothing => character :: xml_unescape_chars rest
+
+xml_unescape : String → String
+xml_unescape text = pack (xml_unescape_chars (unpack text))
+
+required_slice : String → String → Either String XmlElementSlice
+required_slice name xml =
+  case element_slice name xml of
+    Nothing => Left ("MX XML is missing element " ++ name)
+    Just value => Right value
+
+required_text : String → String → Either String String
+required_text name xml =
+  case element_slice name xml of
+    Nothing => Left ("MX XML is missing element " ++ name)
+    Just value => Right (xml_unescape value.element_body)
+
+digit_value : Char → Maybe ℕ
+digit_value '0' = Just 0
+digit_value '1' = Just 1
+digit_value '2' = Just 2
+digit_value '3' = Just 3
+digit_value '4' = Just 4
+digit_value '5' = Just 5
+digit_value '6' = Just 6
+digit_value '7' = Just 7
+digit_value '8' = Just 8
+digit_value '9' = Just 9
+digit_value _ = Nothing
+
+parse_digits : ℕ → List Char → Maybe ℕ
+parse_digits accumulated [] = Just accumulated
+parse_digits accumulated (character :: rest) =
+  case digit_value character of
+    Nothing => Nothing
+    Just digit => parse_digits (accumulated * 10 + digit) rest
+
+parse_number : String → Either String ℕ
+parse_number "" = Left "MX decimal count is empty"
+parse_number text =
+  case parse_digits 0 (unpack text) of
+    Nothing => Left "MX decimal count contains a non-digit"
+    Just value => Right value
+
+parse_account : String → Either String String
+parse_account xml = do
+  other <- required_slice "Othr" xml
+  required_text "Id" other.element_body
+
+parse_agent : String → Either String String
+parse_agent xml = required_text "BICFI" xml
+
+parse_party : String → Either String String
+parse_party xml = required_text "Nm" xml
+
+parse_transfer : String → Either String CreditTransfer
+parse_transfer xml = do
+  payment_id <- required_slice "PmtId" xml
+  instruction_id <- required_text "InstrId" payment_id.element_body
+  end_to_end_id <- required_text "EndToEndId" payment_id.element_body
+  amount <- required_slice "IntrBkSttlmAmt" xml
+  currency <- case attribute_value "Ccy" amount.attributes_text of
+    Nothing => Left "IntrBkSttlmAmt is missing Ccy"
+    Just value => Right value
+  debtor <- required_slice "Dbtr" xml
+  debtor_name <- parse_party debtor.element_body
+  debtor_account_element <- required_slice "DbtrAcct" xml
+  debtor_account <- parse_account debtor_account_element.element_body
+  debtor_agent <- required_slice "DbtrAgt" xml
+  debtor_bic <- parse_agent debtor_agent.element_body
+  creditor_agent <- required_slice "CdtrAgt" xml
+  creditor_bic <- parse_agent creditor_agent.element_body
+  creditor <- required_slice "Cdtr" xml
+  creditor_name <- parse_party creditor.element_body
+  creditor_account_element <- required_slice "CdtrAcct" xml
+  creditor_account <- parse_account creditor_account_element.element_body
+  pure
+    (MkCreditTransfer
+      instruction_id
+      end_to_end_id
+      (MkCurrencyAmount currency (xml_unescape amount.element_body))
+      debtor_name
+      debtor_account
+      debtor_bic
+      creditor_bic
+      creditor_name
+      creditor_account)
+
+parse_pacs008_document : String → Either String Pacs008
+parse_pacs008_document xml = do
+  document <- required_slice "Document" xml
+  namespace <- case attribute_value "xmlns" document.attributes_text of
+    Nothing => Left "Document is missing its ISO 20022 namespace"
+    Just value => Right value
+  if namespace /= "urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+    then Left ("unsupported MX Document namespace " ++ namespace)
+    else do
+      transfer_document <- required_slice "FIToFICstmrCdtTrf" document.element_body
+      group_header <- required_slice "GrpHdr" transfer_document.element_body
+      message_id <- required_text "MsgId" group_header.element_body
+      creation <- required_text "CreDtTm" group_header.element_body
+      transaction_count_text <- required_text "NbOfTxs" group_header.element_body
+      transaction_count <- parse_number transaction_count_text
+      settlement <- required_slice "SttlmInf" group_header.element_body
+      settlement_method <- required_text "SttlmMtd" settlement.element_body
+      transfer_element <- required_slice "CdtTrfTxInf" transfer_document.element_body
+      transfer <- parse_transfer transfer_element.element_body
+      pure
+        (MkPacs008
+          message_id
+          creation
+          transaction_count
+          settlement_method
+          transfer)
+
+parse_application_header : String → Either String (Maybe BusinessApplicationHeader)
+parse_application_header xml =
+  case element_slice "AppHdr" xml of
+    Nothing => Right Nothing
+    Just header => do
+      from <- required_slice "Fr" header.element_body
+      sender <- required_text "BICFI" from.element_body
+      to <- required_slice "To" header.element_body
+      receiver <- required_text "BICFI" to.element_body
+      message_id <- required_text "BizMsgIdr" header.element_body
+      definition_id <- required_text "MsgDefIdr" header.element_body
+      service <- required_text "BizSvc" header.element_body
+      creation <- required_text "CreDt" header.element_body
+      pure
+        (Just
+          (MkBusinessApplicationHeader
+            sender
+            receiver
+            message_id
+            definition_id
+            service
+            creation))
+
+public export
+parse_mx : String → Either String MxMessage
+parse_mx xml = do
+  header <- parse_application_header xml
+  document <- parse_pacs008_document xml
+  pure (MkMxMessage header document)
