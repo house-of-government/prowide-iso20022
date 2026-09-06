@@ -3,4 +3,6 @@ package prowide_iso20022_edric
 version = 0.1.0
 sourcedir = "."
 
+depends = prowide_core_edric
+
 modules = Mx, Mx.Identity, Mx.Types, Mx.Xml, Mx.Read
