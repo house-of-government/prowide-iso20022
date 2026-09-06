@@ -1,5 +1,6 @@
 module Mx.Read
 
+import Mx.Identity
 import Mx.Types
 
 %default total
@@ -175,6 +176,15 @@ parse_number text =
     Nothing => Left "MX decimal count contains a non-digit"
     Just value => Right value
 
+public export
+detect_mx_id : String → Either String MxId
+detect_mx_id xml = do
+  document <- required_slice "Document" xml
+  namespace <- case attribute_value "xmlns" document.attributes_text of
+    Nothing => Left "Document is missing its ISO 20022 namespace"
+    Just value => Right (xml_unescape value)
+  parse_mx_namespace namespace
+
 parse_account : String → Either String AccountIdentification
 parse_account xml =
   case element_slice "IBAN" xml of
@@ -233,16 +243,14 @@ parse_transfer xml = do
 
 parse_pacs008_document : String → Either String Pacs008
 parse_pacs008_document xml = do
-  document <- required_slice "Document" xml
-  namespace <- case attribute_value "xmlns" document.attributes_text of
-    Nothing => Left "Document is missing its ISO 20022 namespace"
-    Just value => Right value
-  if namespace /= "urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
-    then Left ("unsupported MX Document namespace " ++ namespace)
+  message_id <- detect_mx_id xml
+  if not (mx_id_matches message_id "pacs" 8 1 8)
+    then Left ("unsupported MX Document " ++ mx_definition message_id)
     else do
+      document <- required_slice "Document" xml
       transfer_document <- required_slice "FIToFICstmrCdtTrf" document.element_body
       group_header <- required_slice "GrpHdr" transfer_document.element_body
-      message_id <- required_text "MsgId" group_header.element_body
+      group_message_id <- required_text "MsgId" group_header.element_body
       creation <- required_text "CreDtTm" group_header.element_body
       transaction_count_text <- required_text "NbOfTxs" group_header.element_body
       transaction_count <- parse_number transaction_count_text
@@ -252,7 +260,7 @@ parse_pacs008_document xml = do
       transfer <- parse_transfer transfer_element.element_body
       pure
         (MkPacs008
-          message_id
+          group_message_id
           creation
           transaction_count
           settlement_method
@@ -281,9 +289,16 @@ parse_application_header xml =
             service
             creation))
 
+header_matches_document : Maybe BusinessApplicationHeader → Bool
+header_matches_document Nothing = True
+header_matches_document (Just header) =
+  header.message_definition_id == mx_definition pacs00800108
+
 public export
 parse_mx : String → Either String MxMessage
 parse_mx xml = do
   header <- parse_application_header xml
   document <- parse_pacs008_document xml
-  pure (MkMxMessage header document)
+  if header_matches_document header
+    then pure (MkMxMessage header document)
+    else Left "AppHdr MsgDefIdr does not match the Document namespace"
