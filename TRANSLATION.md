@@ -11,14 +11,14 @@ Translate ISO 20022 message handling, not FINplus or SWIFT transport:
 3. Typed MX models generated from ISO 20022 schema metadata.
 4. Category coverage (`pacs`, `camt`, `pain`, and the remaining message families).
 5. Exact decimal/currency representation; payment amounts must not be binary floating point.
-6. Shared domain primitives with the companion `prowide-core` Edriç API.
+6. Shared domain primitives with the companion `prowide-core` Edriç work.
 7. MT ↔ MX translation only after the message-side models and shared primitives are independently stable.
 
 Java module boundaries are not Edriç module requirements. The 70+ JAXB-generated Gradle projects are schema/completeness input, not a module structure to hand-copy. The original XSD generator inputs are not present in this repository, so checked-in generated classes are the local extraction oracle.
 
 ## Shared identifier boundary
 
-This draft depends on the Core draft's `PaymentIdentifiers` Edriç module rather than reproducing BIC/account classes locally. The dependency is deliberately narrow: MX imports the domain values and parsers, not MT message types, FIN parsing, Java classes, or JAXB-generated structures.
+This draft depends directly on the Core draft's tiny `prowide_identifiers_edric` package, whose sole module is `PaymentIdentifiers`. It does not depend on `prowide_core_edric`, MT message types, FIN parsing, or Prowide's Java/JAXB package graph.
 
 MX uses the shared boundary as follows:
 
@@ -49,7 +49,7 @@ Run:
 make test
 ```
 
-For the two draft PRs, CI checks out the Core `edric-translation` head, builds and installs `prowide_core_edric`, and then compiles this package against it. After the Core boundary lands on `main`, this temporary draft-branch reference should move to `main`.
+For the two draft PRs, CI checks out the Core `edric-translation` head, installs only `prowide-identifiers.ipkg`, and then compiles this package against that shared package. After the identifier package lands on `main`, this temporary draft-branch reference should move to `main`.
 
 ## Next generated slices
 
