@@ -5,11 +5,17 @@ import System
 
 %default total
 
+sender_bic : Bic
+sender_bic = MkBic "BANKBEBBXXX"
+
+receiver_bic : Bic
+receiver_bic = MkBic "BANKDEFFXXX"
+
 sample_header : BusinessApplicationHeader
 sample_header =
   MkBusinessApplicationHeader
-    "BANKBEBBAXXX"
-    "BANKDEFFXXXX"
+    sender_bic
+    receiver_bic
     "BUSINESS-MESSAGE-123"
     "pacs.008.001.08"
     "swift.cbprplus.02"
@@ -18,8 +24,8 @@ sample_header =
 wrong_definition_header : BusinessApplicationHeader
 wrong_definition_header =
   MkBusinessApplicationHeader
-    "BANKBEBBAXXX"
-    "BANKDEFFXXXX"
+    sender_bic
+    receiver_bic
     "BUSINESS-MESSAGE-123"
     "pacs.009.001.08"
     "swift.cbprplus.02"
@@ -33,11 +39,11 @@ sample_transfer =
     (MkCurrencyAmount "USD" "1234.56")
     "SHAR"
     "A & B LLC"
-    (Just (OtherAccount "DEBTOR-ACCOUNT"))
-    "BANKBEBBAXXX"
-    "BANKDEFFXXXX"
+    (Just (OtherAccount (MkAccount "DEBTOR-ACCOUNT")))
+    sender_bic
+    receiver_bic
     "C <D> BENEFICIARY"
-    (Just (IbanAccount "DE89370400440532013000"))
+    (Just (IbanAccount (MkAccount "DE89370400440532013000")))
 
 minimal_transfer : CreditTransfer
 minimal_transfer =
@@ -48,8 +54,8 @@ minimal_transfer =
     "SLEV"
     "DEBTOR"
     Nothing
-    "BANKBEBBAXXX"
-    "BANKDEFFXXXX"
+    sender_bic
+    receiver_bic
     "CREDITOR"
     Nothing
 
@@ -83,8 +89,8 @@ minimal_message = MkMxMessage Nothing minimal_document
 expected_header : String
 expected_header =
   "<AppHdr xmlns=\"urn:iso:std:iso:20022:tech:xsd:head.001.001.02\">" ++
-  "<Fr><FIId><FinInstnId><BICFI>BANKBEBBAXXX</BICFI></FinInstnId></FIId></Fr>" ++
-  "<To><FIId><FinInstnId><BICFI>BANKDEFFXXXX</BICFI></FinInstnId></FIId></To>" ++
+  "<Fr><FIId><FinInstnId><BICFI>BANKBEBBXXX</BICFI></FinInstnId></FIId></Fr>" ++
+  "<To><FIId><FinInstnId><BICFI>BANKDEFFXXX</BICFI></FinInstnId></FIId></To>" ++
   "<BizMsgIdr>BUSINESS-MESSAGE-123</BizMsgIdr>" ++
   "<MsgDefIdr>pacs.008.001.08</MsgDefIdr>" ++
   "<BizSvc>swift.cbprplus.02</BizSvc>" ++
@@ -107,8 +113,8 @@ expected_document =
   "<ChrgBr>SHAR</ChrgBr>" ++
   "<Dbtr><Nm>A &amp; B LLC</Nm></Dbtr>" ++
   "<DbtrAcct><Id><Othr><Id>DEBTOR-ACCOUNT</Id></Othr></Id></DbtrAcct>" ++
-  "<DbtrAgt><FinInstnId><BICFI>BANKBEBBAXXX</BICFI></FinInstnId></DbtrAgt>" ++
-  "<CdtrAgt><FinInstnId><BICFI>BANKDEFFXXXX</BICFI></FinInstnId></CdtrAgt>" ++
+  "<DbtrAgt><FinInstnId><BICFI>BANKBEBBXXX</BICFI></FinInstnId></DbtrAgt>" ++
+  "<CdtrAgt><FinInstnId><BICFI>BANKDEFFXXX</BICFI></FinInstnId></CdtrAgt>" ++
   "<Cdtr><Nm>C &lt;D&gt; BENEFICIARY</Nm></Cdtr>" ++
   "<CdtrAcct><Id><IBAN>DE89370400440532013000</IBAN></Id></CdtrAcct>" ++
   "</CdtTrfTxInf>" ++
@@ -118,6 +124,17 @@ expected_document =
 expected_envelope : String
 expected_envelope =
   "<RequestPayload>" ++ expected_header ++ expected_document ++ "</RequestPayload>"
+
+invalid_bic_header : String
+invalid_bic_header =
+  "<AppHdr xmlns=\"urn:iso:std:iso:20022:tech:xsd:head.001.001.02\">" ++
+  "<Fr><FIId><FinInstnId><BICFI>BANKBEBBAXXX</BICFI></FinInstnId></FIId></Fr>" ++
+  "<To><FIId><FinInstnId><BICFI>BANKDEFFXXX</BICFI></FinInstnId></FIId></To>" ++
+  "<BizMsgIdr>BUSINESS-MESSAGE-123</BizMsgIdr>" ++
+  "<MsgDefIdr>pacs.008.001.08</MsgDefIdr>" ++
+  "<BizSvc>swift.cbprplus.02</BizSvc>" ++
+  "<CreDt>2026-09-06T13:44:00-04:00</CreDt>" ++
+  "</AppHdr>"
 
 document_writer_test : Bool
 document_writer_test = render_document sample_message == expected_document
@@ -170,10 +187,39 @@ envelope_read_test =
       case parsed.application_header of
         Nothing => False
         Just header =>
-          header.sender_bic == "BANKBEBBAXXX" &&
-          header.receiver_bic == "BANKDEFFXXXX" &&
+          bic_text header.sender_bic == "BANKBEBBXXX" &&
+          bic_text header.receiver_bic == "BANKDEFFXXX" &&
           header.message_definition_id == "pacs.008.001.08" &&
           render_envelope "RequestPayload" parsed == expected_envelope
+
+account_identification_test : Bool
+account_identification_test =
+  case (sample_transfer.debtor_account, sample_transfer.creditor_account) of
+    (Just (OtherAccount debtor), Just (IbanAccount creditor)) =>
+      account_text debtor == "DEBTOR-ACCOUNT" &&
+      account_text creditor == "DE89370400440532013000"
+    _ => False
+
+bic_boundary_test : Bool
+bic_boundary_test =
+  case (parse_bic "A1CDBEBBXXX", parse_bic "BANKBEBBAXXX", parse_fin_bic "A1CDBEBBXXX") of
+    (Right bic, Left _, Left _) => bic_text bic == "A1CDBEBBXXX"
+    _ => False
+
+account_refusal_test : Bool
+account_refusal_test =
+  case (iban_account "DE89370400440532013000", other_account "", other_account "A\nB") of
+    (Right (IbanAccount account), Left _, Left _) =>
+      account_text account == "DE89370400440532013000"
+    _ => False
+
+invalid_bic_rejected_test : Bool
+invalid_bic_rejected_test =
+  let xml =
+        "<RequestPayload>" ++ invalid_bic_header ++ expected_document ++ "</RequestPayload>"
+  in case parse_mx xml of
+    Left _ => True
+    Right _ => False
 
 optional_transaction_fields_test : Bool
 optional_transaction_fields_test =
@@ -229,6 +275,10 @@ all_pass =
   detected_identity_test &&
   document_read_test &&
   envelope_read_test &&
+  account_identification_test &&
+  bic_boundary_test &&
+  account_refusal_test &&
+  invalid_bic_rejected_test &&
   optional_transaction_fields_test &&
   outer_wrapper_ignored_test &&
   wrong_namespace_rejected_test &&
@@ -244,7 +294,11 @@ main = do
   check "MX namespace identity parses and renders" identity_test
   check "MX identity is detected from Document namespace" detected_identity_test
   check "bare Document parses back to the typed MX model" document_read_test
-  check "wrapped AppHdr plus Document parses back to the typed MX model" envelope_read_test
+  check "wrapped AppHdr plus Document parses shared BIC values" envelope_read_test
+  check "MX preserves IBAN versus other-account declaration" account_identification_test
+  check "shared BIC separates ISO shape from stricter FIN shape" bic_boundary_test
+  check "shared account boundary refuses empty and multiline identifiers" account_refusal_test
+  check "MX parser rejects a 12-character LT address in BICFI" invalid_bic_rejected_test
   check "optional transaction identifiers and accounts remain optional" optional_transaction_fields_test
   check "outer wrapper elements do not affect MX payload reading" outer_wrapper_ignored_test
   check "pacs.008 reader rejects another Document namespace" wrong_namespace_rejected_test
