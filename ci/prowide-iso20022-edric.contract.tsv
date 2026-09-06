@@ -1,10 +1,13 @@
 nonempty	PROWIDE-MX-EDRIC-FACADE	Mx.idric
 contains	PROWIDE-MX-EDRIC-REEXPORT	Mx.idric	import public Mx.Types
 contains	PROWIDE-MX-EDRIC-HEADER	Mx/Types.idric	record BusinessApplicationHeader where
+contains	PROWIDE-MX-EDRIC-OPTIONAL-HEADER	Mx/Types.idric	application_header : Maybe BusinessApplicationHeader
 contains	PROWIDE-MX-EDRIC-AMOUNT	Mx/Types.idric	record CurrencyAmount where
 contains	PROWIDE-MX-EDRIC-PACS008	Mx/Types.idric	record Pacs008 where
-contains	PROWIDE-MX-EDRIC-XML-WRITER	Mx/Xml.idric	render_mx : MxMessage → String
+contains	PROWIDE-MX-EDRIC-DOCUMENT-WRITER	Mx/Xml.idric	render_document : MxMessage → String
+contains	PROWIDE-MX-EDRIC-ENVELOPE-WRITER	Mx/Xml.idric	render_envelope : String → MxMessage → String
 contains	PROWIDE-MX-EDRIC-EXACT-MONEY	tests/MxTests.idric	money stays exact text, not floating point
-contains	PROWIDE-MX-EDRIC-TEST	tests/MxTests.idric	pacs.008 renders canonical XML
+contains	PROWIDE-MX-EDRIC-DOCUMENT-TEST	tests/MxTests.idric	pacs.008 Document renders canonical XML
+contains	PROWIDE-MX-EDRIC-ENVELOPE-TEST	tests/MxTests.idric	AppHdr plus Document requires explicit envelope
 contains	PROWIDE-MX-EDRIC-PACKAGE	prowide-iso20022.ipkg	modules = Mx, Mx.Types, Mx.Xml
 not_contains	PROWIDE-MX-EDRIC-NO-DOUBLE	Mx/Types.idric	Double
