@@ -43,5 +43,5 @@ record Pacs008 where
 public export
 record MxMessage where
   constructor MkMxMessage
-  application_header : BusinessApplicationHeader
+  application_header : Maybe BusinessApplicationHeader
   pacs008_document : Pacs008
