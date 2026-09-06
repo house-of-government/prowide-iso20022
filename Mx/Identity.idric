@@ -73,9 +73,9 @@ parse_mx_definition definition =
 
 public export
 parse_mx_namespace : String → Either String MxId
-parse_mx_namespace namespace =
-  case strip_prefix (unpack namespace_prefix) (unpack namespace) of
-    Nothing => Left ("not an ISO 20022 Document namespace: " ++ namespace)
+parse_mx_namespace namespace_text =
+  case strip_prefix (unpack namespace_prefix) (unpack namespace_text) of
+    Nothing => Left ("not an ISO 20022 Document namespace: " ++ namespace_text)
     Just definition => parse_mx_definition (pack definition)
 
 three_digits : ℕ → String
