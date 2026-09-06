@@ -1,25 +1,34 @@
 nonempty	PROWIDE-MX-EDRIC-FACADE	Mx.idric
+contains	PROWIDE-MX-EDRIC-IDENTIFIERS-REEXPORT	Mx.idric	import public PaymentIdentifiers
 contains	PROWIDE-MX-EDRIC-IDENTITY-REEXPORT	Mx.idric	import public Mx.Identity
 contains	PROWIDE-MX-EDRIC-REEXPORT	Mx.idric	import public Mx.Types
 contains	PROWIDE-MX-EDRIC-ID	Mx/Identity.idric	record MxId where
 contains	PROWIDE-MX-EDRIC-ID-PARSER	Mx/Identity.idric	parse_mx_namespace : String → Either String MxId
 contains	PROWIDE-MX-EDRIC-HEADER	Mx/Types.idric	record BusinessApplicationHeader where
+contains	PROWIDE-MX-EDRIC-SENDER-BIC	Mx/Types.idric	sender_bic : Bic
 contains	PROWIDE-MX-EDRIC-OPTIONAL-HEADER	Mx/Types.idric	application_header : Maybe BusinessApplicationHeader
 contains	PROWIDE-MX-EDRIC-AMOUNT	Mx/Types.idric	record CurrencyAmount where
-contains	PROWIDE-MX-EDRIC-ACCOUNT-CHOICE	Mx/Types.idric	data AccountIdentification
+contains	PROWIDE-MX-EDRIC-ACCOUNT-CHOICE	Mx/Types.idric	debtor_account : Maybe AccountIdentification
+contains	PROWIDE-MX-EDRIC-AGENT-BIC	Mx/Types.idric	debtor_agent_bic : Bic
 contains	PROWIDE-MX-EDRIC-CHARGE-BEARER	Mx/Types.idric	charge_bearer : String
 contains	PROWIDE-MX-EDRIC-PACS008	Mx/Types.idric	record Pacs008 where
 contains	PROWIDE-MX-EDRIC-DOCUMENT-WRITER	Mx/Xml.idric	render_document : MxMessage → String
 contains	PROWIDE-MX-EDRIC-ENVELOPE-WRITER	Mx/Xml.idric	render_envelope : String → MxMessage → String
 contains	PROWIDE-MX-EDRIC-ID-DETECTOR	Mx/Read.idric	detect_mx_id : String → Either String MxId
+contains	PROWIDE-MX-EDRIC-BIC-READER	Mx/Read.idric	parse_agent : String → Either String Bic
 contains	PROWIDE-MX-EDRIC-READER	Mx/Read.idric	parse_mx : String → Either String MxMessage
 contains	PROWIDE-MX-EDRIC-EXACT-MONEY	tests/MxTests.idric	money stays exact text, not floating point
 contains	PROWIDE-MX-EDRIC-IDENTITY-TEST	tests/MxTests.idric	MX namespace identity parses and renders
 contains	PROWIDE-MX-EDRIC-DOCUMENT-TEST	tests/MxTests.idric	pacs.008 Document renders deterministic subset XML
 contains	PROWIDE-MX-EDRIC-ENVELOPE-TEST	tests/MxTests.idric	AppHdr plus Document requires explicit envelope
+contains	PROWIDE-MX-EDRIC-BIC-TEST	tests/MxTests.idric	wrapped AppHdr plus Document parses shared BIC values
+contains	PROWIDE-MX-EDRIC-ACCOUNT-TEST	tests/MxTests.idric	MX preserves IBAN versus other-account declaration
+contains	PROWIDE-MX-EDRIC-BIC-BOUNDARY	tests/MxTests.idric	shared BIC separates ISO shape from stricter FIN shape
+contains	PROWIDE-MX-EDRIC-LT-REFUSAL	tests/MxTests.idric	MX parser rejects a 12-character LT address in BICFI
 contains	PROWIDE-MX-EDRIC-OPTIONAL-TRANSACTION	tests/MxTests.idric	optional transaction identifiers and accounts remain optional
 contains	PROWIDE-MX-EDRIC-READ-TEST	tests/MxTests.idric	bare Document parses back to the typed MX model
 contains	PROWIDE-MX-EDRIC-WRAPPER-TEST	tests/MxTests.idric	outer wrapper elements do not affect MX payload reading
 contains	PROWIDE-MX-EDRIC-HEADER-ID-TEST	tests/MxTests.idric	AppHdr MsgDefIdr must match Document identity
+contains	PROWIDE-MX-EDRIC-IDENTIFIER-DEPENDENCY	prowide-iso20022.ipkg	depends = prowide_identifiers_edric
 contains	PROWIDE-MX-EDRIC-PACKAGE	prowide-iso20022.ipkg	modules = Mx, Mx.Identity, Mx.Types, Mx.Xml, Mx.Read
 not_contains	PROWIDE-MX-EDRIC-NO-DOUBLE	Mx/Types.idric	Double
