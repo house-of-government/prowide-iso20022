@@ -1,0 +1,85 @@
+module Mx.Xml
+
+import Mx.Types
+
+%default total
+
+xml_escape_char : Char → String
+xml_escape_char '&' = "&amp;"
+xml_escape_char '<' = "&lt;"
+xml_escape_char '>' = "&gt;"
+xml_escape_char character = pack [character]
+
+xml_escape_characters : List Char → String
+xml_escape_characters [] = ""
+xml_escape_characters (character :: remaining) =
+  xml_escape_char character ++ xml_escape_characters remaining
+
+public export
+xml_escape : String → String
+xml_escape text = xml_escape_characters (unpack text)
+
+element : String → String → String
+element name content = "<" ++ name ++ ">" ++ content ++ "</" ++ name ++ ">"
+
+bic_institution : String → String
+bic_institution bic =
+  element "FIId" (element "FinInstnId" (element "BICFI" (xml_escape bic)))
+
+account : String → String
+account account_id =
+  element "Id" (element "Othr" (element "Id" (xml_escape account_id)))
+
+agent : String → String
+agent bic = element "FinInstnId" (element "BICFI" (xml_escape bic))
+
+render_amount : CurrencyAmount → String
+render_amount amount =
+  "<IntrBkSttlmAmt Ccy=\"" ++ xml_escape amount.currency_code ++ "\">" ++
+  xml_escape amount.amount_text ++
+  "</IntrBkSttlmAmt>"
+
+public export
+render_application_header : BusinessApplicationHeader → String
+render_application_header header =
+  "<AppHdr xmlns=\"urn:iso:std:iso:20022:tech:xsd:head.001.001.02\">" ++
+    element "Fr" (bic_institution header.sender_bic) ++
+    element "To" (bic_institution header.receiver_bic) ++
+    element "BizMsgIdr" (xml_escape header.business_message_id) ++
+    element "MsgDefIdr" (xml_escape header.message_definition_id) ++
+    element "BizSvc" (xml_escape header.business_service) ++
+    element "CreDt" (xml_escape header.creation_date_time) ++
+  "</AppHdr>"
+
+render_credit_transfer : CreditTransfer → String
+render_credit_transfer transfer =
+  element "CdtTrfTxInf"
+    (element "PmtId"
+       (element "InstrId" (xml_escape transfer.instruction_id) ++
+        element "EndToEndId" (xml_escape transfer.end_to_end_id)) ++
+     render_amount transfer.settlement_amount ++
+     element "Dbtr" (element "Nm" (xml_escape transfer.debtor_name)) ++
+     element "DbtrAcct" (account transfer.debtor_account) ++
+     element "DbtrAgt" (agent transfer.debtor_agent_bic) ++
+     element "CdtrAgt" (agent transfer.creditor_agent_bic) ++
+     element "Cdtr" (element "Nm" (xml_escape transfer.creditor_name)) ++
+     element "CdtrAcct" (account transfer.creditor_account))
+
+public export
+render_pacs008 : Pacs008 → String
+render_pacs008 message =
+  "<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08\">" ++
+    element "FIToFICstmrCdtTrf"
+      (element "GrpHdr"
+         (element "MsgId" (xml_escape message.group_message_id) ++
+          element "CreDtTm" (xml_escape message.group_creation_date_time) ++
+          element "NbOfTxs" (show message.number_of_transactions) ++
+          element "SttlmInf" (element "SttlmMtd" (xml_escape message.settlement_method))) ++
+       render_credit_transfer message.credit_transfer) ++
+  "</Document>"
+
+public export
+render_mx : MxMessage → String
+render_mx message =
+  render_application_header message.application_header ++
+  render_pacs008 message.pacs008_document
