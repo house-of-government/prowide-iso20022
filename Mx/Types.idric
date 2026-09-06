@@ -1,0 +1,47 @@
+module Mx.Types
+
+%default total
+
+public export
+record BusinessApplicationHeader where
+  constructor MkBusinessApplicationHeader
+  sender_bic : String
+  receiver_bic : String
+  business_message_id : String
+  message_definition_id : String
+  business_service : String
+  creation_date_time : String
+
+public export
+record CurrencyAmount where
+  constructor MkCurrencyAmount
+  currency_code : String
+  amount_text : String
+
+public export
+record CreditTransfer where
+  constructor MkCreditTransfer
+  instruction_id : String
+  end_to_end_id : String
+  settlement_amount : CurrencyAmount
+  debtor_name : String
+  debtor_account : String
+  debtor_agent_bic : String
+  creditor_agent_bic : String
+  creditor_name : String
+  creditor_account : String
+
+public export
+record Pacs008 where
+  constructor MkPacs008
+  group_message_id : String
+  group_creation_date_time : String
+  number_of_transactions : ℕ
+  settlement_method : String
+  credit_transfer : CreditTransfer
+
+public export
+record MxMessage where
+  constructor MkMxMessage
+  application_header : BusinessApplicationHeader
+  pacs008_document : Pacs008
