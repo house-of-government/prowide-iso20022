@@ -35,13 +35,13 @@ jobs:
           echo "$GITHUB_WORKSPACE/.tools/Idric/_/.tools/bin" >> "$GITHUB_PATH"
           "$GITHUB_WORKSPACE/.tools/Idric/idris2" --version
 
-      - name: Build and install shared Core identifiers
+      - name: Build and install shared identifiers
         env:
           IDRIS2_PREFIX: ${{ github.workspace }}/.tools/Idric/bootstrap-build
         run: |
           cd "$GITHUB_WORKSPACE/.tools/prowide-core"
-          make all IDRIC="$GITHUB_WORKSPACE/.tools/Idric/idris2"
-          "$GITHUB_WORKSPACE/.tools/Idric/idris2" --install prowide-core.ipkg
+          "$GITHUB_WORKSPACE/.tools/Idric/idris2" --build prowide-identifiers.ipkg
+          "$GITHUB_WORKSPACE/.tools/Idric/idris2" --install prowide-identifiers.ipkg
 
       - name: Build and run MX acceptance tests
         env:
