@@ -15,11 +15,8 @@ strip_prefix [] input = Just input
 strip_prefix _ [] = Nothing
 strip_prefix (expected :: remaining_prefix) (actual :: remaining) =
   if expected == actual
-    then strip_prefix remaining_prefix input
+    then strip_prefix remaining_prefix remaining
     else Nothing
-  where
-    input : List Char
-    input = actual :: remaining
 
 name_end : Char → Bool
 name_end ' ' = True
