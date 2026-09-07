@@ -43,7 +43,7 @@ sample_transfer =
     sender_bic
     receiver_bic
     "C <D> BENEFICIARY"
-    (Just (IbanAccount (MkAccount "DE89370400440532013000")))
+    (Just (IbanAccount (MkIban "DE89370400440532013000")))
 
 minimal_transfer : CreditTransfer
 minimal_transfer =
@@ -197,7 +197,7 @@ account_identification_test =
   case (sample_transfer.debtor_account, sample_transfer.creditor_account) of
     (Just (OtherAccount debtor), Just (IbanAccount creditor)) =>
       account_text debtor == "DEBTOR-ACCOUNT" &&
-      account_text creditor == "DE89370400440532013000"
+      iban_text creditor == "DE89370400440532013000"
     _ => False
 
 bic_boundary_test : Bool
@@ -208,9 +208,15 @@ bic_boundary_test =
 
 account_refusal_test : Bool
 account_refusal_test =
-  case (iban_account "DE89370400440532013000", other_account "", other_account "A\nB") of
-    (Right (IbanAccount account), Left _, Left _) =>
-      account_text account == "DE89370400440532013000"
+  case ( iban_account "DE89370400440532013000"
+       , iban_account "DE88370400440532013000"
+       , iban_account "DE893704004405320130000"
+       , iban_account "ZZ001234567890"
+       , other_account ""
+       , other_account "A\nB"
+       ) of
+    (Right (IbanAccount iban), Left _, Left _, Left _, Left _, Left _) =>
+      iban_text iban == "DE89370400440532013000"
     _ => False
 
 invalid_bic_rejected_test : Bool
@@ -295,9 +301,9 @@ main = do
   check "MX identity is detected from Document namespace" detected_identity_test
   check "bare Document parses back to the typed MX model" document_read_test
   check "wrapped AppHdr plus Document parses shared BIC values" envelope_read_test
-  check "MX preserves IBAN versus other-account declaration" account_identification_test
+  check "MX preserves constrained IBAN versus other-account declaration" account_identification_test
   check "shared BIC separates ISO shape from stricter FIN shape" bic_boundary_test
-  check "shared account boundary refuses empty and multiline identifiers" account_refusal_test
+  check "shared account boundary validates IBAN registry length/checksum and refuses invalid other identifiers" account_refusal_test
   check "MX parser rejects a 12-character LT address in BICFI" invalid_bic_rejected_test
   check "optional transaction identifiers and accounts remain optional" optional_transaction_fields_test
   check "outer wrapper elements do not affect MX payload reading" outer_wrapper_ignored_test
