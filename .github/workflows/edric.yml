@@ -1,0 +1,56 @@
+name: Edric MX CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: edric-mx-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mx:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Prowide ISO 20022 fork
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Checkout shared identifier package from Core draft
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/prowide-core
+          ref: edric-translation
+          path: .tools/prowide-core
+
+      - name: Checkout present Idriç compiler
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/Idric
+          ref: Idriç
+          path: .tools/Idric
+
+      - name: Build present Idriç compiler through its public entrypoint
+        run: |
+          "$GITHUB_WORKSPACE/.tools/Idric/edric" bootstrap
+          echo "$GITHUB_WORKSPACE/.tools/Idric/_/.tools/bin" >> "$GITHUB_PATH"
+          "$GITHUB_WORKSPACE/.tools/Idric/idris2" --version
+
+      - name: Build and install shared identifier package
+        env:
+          IDRIS2_PREFIX: ${{ github.workspace }}/.tools/Idric/bootstrap-build
+        run: |
+          cd "$GITHUB_WORKSPACE/.tools/prowide-core"
+          "$GITHUB_WORKSPACE/.tools/Idric/idris2" --build prowide-identifiers.ipkg
+          "$GITHUB_WORKSPACE/.tools/Idric/idris2" --install prowide-identifiers.ipkg
+
+      - name: Build and run MX acceptance tests
+        env:
+          IDRIS2_PREFIX: ${{ github.workspace }}/.tools/Idric/bootstrap-build
+        run: |
+          make test IDRIC="$GITHUB_WORKSPACE/.tools/Idric/idris2"
+
+      - name: Verify ai-ci contract from present main
+        uses: isomorphisms/ai-ci@main
+        with:
+          suite: ci/ai-ci.suite.tsv
+          root: .

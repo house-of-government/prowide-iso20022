@@ -1,0 +1,312 @@
+module Main
+
+import Mx
+import System
+
+%default total
+
+sender_bic : Bic
+sender_bic = MkBic "BANKBEBBXXX"
+
+receiver_bic : Bic
+receiver_bic = MkBic "BANKDEFFXXX"
+
+sample_header : BusinessApplicationHeader
+sample_header =
+  MkBusinessApplicationHeader
+    sender_bic
+    receiver_bic
+    "BUSINESS-MESSAGE-123"
+    "pacs.008.001.08"
+    "swift.cbprplus.02"
+    "2026-09-06T13:44:00-04:00"
+
+wrong_definition_header : BusinessApplicationHeader
+wrong_definition_header =
+  MkBusinessApplicationHeader
+    sender_bic
+    receiver_bic
+    "BUSINESS-MESSAGE-123"
+    "pacs.009.001.08"
+    "swift.cbprplus.02"
+    "2026-09-06T13:44:00-04:00"
+
+sample_transfer : CreditTransfer
+sample_transfer =
+  MkCreditTransfer
+    (Just "INSTRUCTION-1")
+    "END-TO-END-1"
+    (MkCurrencyAmount "USD" "1234.56")
+    "SHAR"
+    "A & B LLC"
+    (Just (OtherAccount (MkAccount "DEBTOR-ACCOUNT")))
+    sender_bic
+    receiver_bic
+    "C <D> BENEFICIARY"
+    (Just (IbanAccount (MkIban "DE89370400440532013000")))
+
+minimal_transfer : CreditTransfer
+minimal_transfer =
+  MkCreditTransfer
+    Nothing
+    "END-TO-END-MINIMAL"
+    (MkCurrencyAmount "EUR" "1.00")
+    "SLEV"
+    "DEBTOR"
+    Nothing
+    sender_bic
+    receiver_bic
+    "CREDITOR"
+    Nothing
+
+sample_document : Pacs008
+sample_document =
+  MkPacs008
+    "GROUP-MESSAGE-123"
+    "2026-09-06T13:44:00-04:00"
+    1
+    "CLRG"
+    sample_transfer
+
+minimal_document : Pacs008
+minimal_document =
+  MkPacs008
+    "GROUP-MESSAGE-MINIMAL"
+    "2026-09-06T13:44:00-04:00"
+    1
+    "CLRG"
+    minimal_transfer
+
+sample_message : MxMessage
+sample_message = MkMxMessage (Just sample_header) sample_document
+
+sample_message_without_header : MxMessage
+sample_message_without_header = MkMxMessage Nothing sample_document
+
+minimal_message : MxMessage
+minimal_message = MkMxMessage Nothing minimal_document
+
+expected_header : String
+expected_header =
+  "<AppHdr xmlns=\"urn:iso:std:iso:20022:tech:xsd:head.001.001.02\">" ++
+  "<Fr><FIId><FinInstnId><BICFI>BANKBEBBXXX</BICFI></FinInstnId></FIId></Fr>" ++
+  "<To><FIId><FinInstnId><BICFI>BANKDEFFXXX</BICFI></FinInstnId></FIId></To>" ++
+  "<BizMsgIdr>BUSINESS-MESSAGE-123</BizMsgIdr>" ++
+  "<MsgDefIdr>pacs.008.001.08</MsgDefIdr>" ++
+  "<BizSvc>swift.cbprplus.02</BizSvc>" ++
+  "<CreDt>2026-09-06T13:44:00-04:00</CreDt>" ++
+  "</AppHdr>"
+
+expected_document : String
+expected_document =
+  "<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08\">" ++
+  "<FIToFICstmrCdtTrf>" ++
+  "<GrpHdr>" ++
+  "<MsgId>GROUP-MESSAGE-123</MsgId>" ++
+  "<CreDtTm>2026-09-06T13:44:00-04:00</CreDtTm>" ++
+  "<NbOfTxs>1</NbOfTxs>" ++
+  "<SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>" ++
+  "</GrpHdr>" ++
+  "<CdtTrfTxInf>" ++
+  "<PmtId><InstrId>INSTRUCTION-1</InstrId><EndToEndId>END-TO-END-1</EndToEndId></PmtId>" ++
+  "<IntrBkSttlmAmt Ccy=\"USD\">1234.56</IntrBkSttlmAmt>" ++
+  "<ChrgBr>SHAR</ChrgBr>" ++
+  "<Dbtr><Nm>A &amp; B LLC</Nm></Dbtr>" ++
+  "<DbtrAcct><Id><Othr><Id>DEBTOR-ACCOUNT</Id></Othr></Id></DbtrAcct>" ++
+  "<DbtrAgt><FinInstnId><BICFI>BANKBEBBXXX</BICFI></FinInstnId></DbtrAgt>" ++
+  "<CdtrAgt><FinInstnId><BICFI>BANKDEFFXXX</BICFI></FinInstnId></CdtrAgt>" ++
+  "<Cdtr><Nm>C &lt;D&gt; BENEFICIARY</Nm></Cdtr>" ++
+  "<CdtrAcct><Id><IBAN>DE89370400440532013000</IBAN></Id></CdtrAcct>" ++
+  "</CdtTrfTxInf>" ++
+  "</FIToFICstmrCdtTrf>" ++
+  "</Document>"
+
+expected_envelope : String
+expected_envelope =
+  "<RequestPayload>" ++ expected_header ++ expected_document ++ "</RequestPayload>"
+
+invalid_bic_header : String
+invalid_bic_header =
+  "<AppHdr xmlns=\"urn:iso:std:iso:20022:tech:xsd:head.001.001.02\">" ++
+  "<Fr><FIId><FinInstnId><BICFI>BANKBEBBAXXX</BICFI></FinInstnId></FIId></Fr>" ++
+  "<To><FIId><FinInstnId><BICFI>BANKDEFFXXX</BICFI></FinInstnId></FIId></To>" ++
+  "<BizMsgIdr>BUSINESS-MESSAGE-123</BizMsgIdr>" ++
+  "<MsgDefIdr>pacs.008.001.08</MsgDefIdr>" ++
+  "<BizSvc>swift.cbprplus.02</BizSvc>" ++
+  "<CreDt>2026-09-06T13:44:00-04:00</CreDt>" ++
+  "</AppHdr>"
+
+document_writer_test : Bool
+document_writer_test = render_document sample_message == expected_document
+
+envelope_writer_test : Bool
+envelope_writer_test = render_envelope "RequestPayload" sample_message == expected_envelope
+
+optional_header_test : Bool
+optional_header_test =
+  render_envelope "RequestPayload" sample_message_without_header ==
+  "<RequestPayload>" ++ expected_document ++ "</RequestPayload>"
+
+exact_amount_test : Bool
+exact_amount_test = sample_transfer.settlement_amount.amount_text == "1234.56"
+
+escape_test : Bool
+escape_test =
+  xml_escape "A & B < C" == "A &amp; B &lt; C" &&
+  xml_escape_attribute "USD\"X" == "USD&quot;X"
+
+identity_test : Bool
+identity_test =
+  case parse_mx_namespace "urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08" of
+    Left _ => False
+    Right message_id =>
+      mx_id_matches message_id "pacs" 8 1 8 &&
+      mx_definition message_id == "pacs.008.001.08" &&
+      mx_namespace message_id == "urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+
+detected_identity_test : Bool
+detected_identity_test =
+  case detect_mx_id expected_document of
+    Left _ => False
+    Right message_id => mx_id_matches message_id "pacs" 8 1 8
+
+document_read_test : Bool
+document_read_test =
+  case parse_mx expected_document of
+    Left _ => False
+    Right parsed =>
+      case parsed.application_header of
+        Just _ => False
+        Nothing => render_document parsed == expected_document
+
+envelope_read_test : Bool
+envelope_read_test =
+  case parse_mx expected_envelope of
+    Left _ => False
+    Right parsed =>
+      case parsed.application_header of
+        Nothing => False
+        Just header =>
+          bic_text header.sender_bic == "BANKBEBBXXX" &&
+          bic_text header.receiver_bic == "BANKDEFFXXX" &&
+          header.message_definition_id == "pacs.008.001.08" &&
+          render_envelope "RequestPayload" parsed == expected_envelope
+
+account_identification_test : Bool
+account_identification_test =
+  case (sample_transfer.debtor_account, sample_transfer.creditor_account) of
+    (Just (OtherAccount debtor), Just (IbanAccount creditor)) =>
+      account_text debtor == "DEBTOR-ACCOUNT" &&
+      iban_text creditor == "DE89370400440532013000"
+    _ => False
+
+bic_boundary_test : Bool
+bic_boundary_test =
+  case (parse_bic "A1CDBEBBXXX", parse_bic "BANKBEBBAXXX", parse_fin_bic "A1CDBEBBXXX") of
+    (Right bic, Left _, Left _) => bic_text bic == "A1CDBEBBXXX"
+    _ => False
+
+account_refusal_test : Bool
+account_refusal_test =
+  case ( iban_account "DE89370400440532013000"
+       , iban_account "DE88370400440532013000"
+       , iban_account "DE893704004405320130000"
+       , iban_account "ZZ001234567890"
+       , other_account ""
+       , other_account "A\nB"
+       ) of
+    (Right (IbanAccount iban), Left _, Left _, Left _, Left _, Left _) =>
+      iban_text iban == "DE89370400440532013000"
+    _ => False
+
+invalid_bic_rejected_test : Bool
+invalid_bic_rejected_test =
+  let xml =
+        "<RequestPayload>" ++ invalid_bic_header ++ expected_document ++ "</RequestPayload>"
+  in case parse_mx xml of
+    Left _ => True
+    Right _ => False
+
+optional_transaction_fields_test : Bool
+optional_transaction_fields_test =
+  let xml = render_document minimal_message in
+    case parse_mx xml of
+      Left _ => False
+      Right parsed =>
+        let transfer = parsed.pacs008_document.credit_transfer in
+          case (transfer.instruction_id, transfer.debtor_account, transfer.creditor_account) of
+            (Nothing, Nothing, Nothing) => render_document parsed == xml
+            _ => False
+
+outer_wrapper_ignored_test : Bool
+outer_wrapper_ignored_test =
+  case parse_mx ("<Outer><Inner>metadata</Inner>" ++ expected_envelope ++ "</Outer>") of
+    Left _ => False
+    Right parsed =>
+      parsed.pacs008_document.group_message_id == "GROUP-MESSAGE-123" &&
+      parsed.pacs008_document.credit_transfer.settlement_amount.amount_text == "1234.56" &&
+      parsed.pacs008_document.credit_transfer.charge_bearer == "SHAR"
+
+wrong_namespace_rejected_test : Bool
+wrong_namespace_rejected_test =
+  case parse_mx
+    ("<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:pacs.009.001.08\">" ++
+     "<FIToFICstmrCdtTrf></FIToFICstmrCdtTrf></Document>") of
+    Left _ => True
+    Right _ => False
+
+header_mismatch_rejected_test : Bool
+header_mismatch_rejected_test =
+  let xml =
+        "<RequestPayload>" ++
+        render_application_header wrong_definition_header ++
+        expected_document ++
+        "</RequestPayload>"
+  in case parse_mx xml of
+    Left _ => True
+    Right _ => False
+
+check : String → Bool → IO ()
+check name True = putStrLn ("ok   " ++ name)
+check name False = putStrLn ("FAIL " ++ name)
+
+all_pass : Bool
+all_pass =
+  document_writer_test &&
+  envelope_writer_test &&
+  optional_header_test &&
+  exact_amount_test &&
+  escape_test &&
+  identity_test &&
+  detected_identity_test &&
+  document_read_test &&
+  envelope_read_test &&
+  account_identification_test &&
+  bic_boundary_test &&
+  account_refusal_test &&
+  invalid_bic_rejected_test &&
+  optional_transaction_fields_test &&
+  outer_wrapper_ignored_test &&
+  wrong_namespace_rejected_test &&
+  header_mismatch_rejected_test
+
+main : IO ()
+main = do
+  check "pacs.008 Document renders deterministic subset XML" document_writer_test
+  check "AppHdr plus Document requires explicit envelope" envelope_writer_test
+  check "AppHdr is optional" optional_header_test
+  check "money stays exact text, not floating point" exact_amount_test
+  check "XML text and attributes are escaped" escape_test
+  check "MX namespace identity parses and renders" identity_test
+  check "MX identity is detected from Document namespace" detected_identity_test
+  check "bare Document parses back to the typed MX model" document_read_test
+  check "wrapped AppHdr plus Document parses shared BIC values" envelope_read_test
+  check "MX preserves constrained IBAN versus other-account declaration" account_identification_test
+  check "shared BIC separates ISO shape from stricter FIN shape" bic_boundary_test
+  check "shared account boundary validates IBAN registry length/checksum and refuses invalid other identifiers" account_refusal_test
+  check "MX parser rejects a 12-character LT address in BICFI" invalid_bic_rejected_test
+  check "optional transaction identifiers and accounts remain optional" optional_transaction_fields_test
+  check "outer wrapper elements do not affect MX payload reading" outer_wrapper_ignored_test
+  check "pacs.008 reader rejects another Document namespace" wrong_namespace_rejected_test
+  check "AppHdr MsgDefIdr must match Document identity" header_mismatch_rejected_test
+  if all_pass then pure () else exitFailure
